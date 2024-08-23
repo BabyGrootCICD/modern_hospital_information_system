@@ -1,0 +1,67 @@
+name: "CodeQL-update"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write  # Grant write permission for contents
+  security-events: write  # Grant write permission for security events
+  actions: read  # Ensure actions can be accessed
+  checks: write  # Ensure checks can be accessed and updated
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['csharp']
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup .NET Core
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '7.x'  # Adjust based on your project's .NET version
+
+    - name: Initialize the CodeQL engine
+      uses: github/codeql-action/init@v2
+      with:
+        languages: ${{ matrix.language }}
+
+    - name: Restore dependencies for KMU.HisOrder.Console.Gateway project
+      run: dotnet restore
+      working-directory: KMU.HisOrder.Console.Gateway
+
+    - name: Restore dependencies for KMU.HisOrder.MVC project
+      run: dotnet restore
+      working-directory: KMU.HisOrder.MVC
+
+    - name: Restore dependencies for KMU.MOHD.WebAPI project
+      run: dotnet restore
+      working-directory: KMU.MOHD.WebAPI
+
+    - name: Build KMU.HisOrder.Console.Gateway project
+      run: dotnet build --no-restore --configuration Release --verbosity detailed
+      working-directory: KMU.HisOrder.Console.Gateway
+
+    - name: Build KMU.HisOrder.MVC project
+      run: dotnet build --no-restore --configuration Release --verbosity detailed
+      working-directory: KMU.HisOrder.MVC
+
+    - name: Build KMU.MOHD.WebAPI project
+      run: dotnet build --no-restore --configuration Release --verbosity detailed
+      working-directory: KMU.MOHD.WebAPI
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+      with:
+        upload: true  # Ensure results are uploaded
+
+    - name: Print GitHub context  # Debugging step
+      run: echo "${{ toJson(github) }}"
