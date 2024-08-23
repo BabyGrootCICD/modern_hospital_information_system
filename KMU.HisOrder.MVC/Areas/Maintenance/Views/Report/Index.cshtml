@@ -1,0 +1,94 @@
+﻿@using Microsoft.EntityFrameworkCore
+@inject KMU.HisOrder.MVC.Models.KMUContext _context
+@model Newtonsoft.Json.Linq.JArray;
+
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Index";
+
+
+    var Model = _context.KmuDepartments.ToList();
+    var registration = _context.Registrations.ToList();
+    var cy = Convert.ToInt32(TempData["year"]);
+    int month = Convert.ToInt32(TempData["month"]);
+    var days = DateTime.DaysInMonth(cy, month);
+
+}
+
+
+<div class="mx-5">
+ <table class="table table-responsive">
+
+     <tr>
+       <form  asp-area="Maintenance" asp-action="Index" asp-controller="Report" method="post">
+           <td>
+               Year
+                <input class="form-control input-sm" name="year" id="year" value="@TempData["year"]" style="width:7rem;" />
+           </td>
+           <td>
+               Month
+               <div class="d-flex">
+                <input  class="form-control input-sm" name="month" id="month" value="@TempData["month"]" style="width:10rem;" />
+               <input type="submit" class="btn btn-primary " id="btnsearch" value="Search" />
+               </div>
+           </td>
+         
+       </form>
+        <form asp-area="Maintenance" asp-action="ExporttoExcel" asp-controller="Report" method="post">
+            <td>
+                <div class="mt-4">
+                    <input type="hidden" name="HtmlTable" />
+                    <input type="submit" id="btnsubmit" value="Export" class="btn btn-warning text-dark" />
+                </div>  
+            </td>
+        </form>
+     
+     </tr>
+ </table>
+
+
+    <div id="idEmployee">
+    <div hidden>
+        @*<h5>Date: <span>@TempData["month"]</span>/<span>@TempData["year"]</span></h5>*@
+        <h5>Date: @DateTime.Now</h5>
+    </div>
+        <table class="table col-4 table-striped table-hover" >
+    <thead>
+        <tr>
+            <th>Department</th>
+            <th>Patient</th>
+        </tr>
+    </thead>
+    <tbody>
+      @foreach (var item in Model) {
+          @if(registration.Any(r=> r.RegDepartment == item.DptCode && (r.RegStatus == "*" || r.RegStatus == "T") && (r.RegDate >= DateOnly.FromDateTime(new DateTime(cy, month, 1)) && r.RegDate <= DateOnly.FromDateTime(new DateTime(cy, month, days))))){
+
+        <tr>
+          <td>@item.DptName</td>
+         
+          <td>@registration.Where(r=> (r.RegDepartment == item.DptCode) && (r.RegStatus== "*"|| r.RegStatus == "T") && (r.RegDate >= DateOnly.FromDateTime(new DateTime(cy, month, 1)) && r.RegDate <= DateOnly.FromDateTime(new DateTime(cy, month, days)))).Count()</td>
+        </tr>
+      
+          }
+}
+    </tbody>
+</table>
+</div>
+</div>
+
+
+
+
+<script src="~/lib/jquery1.min.js"></script>
+    <script>
+    
+
+     $("#btnsubmit").click(function () {
+
+         $("input[name='HtmlTable']").val($("#idEmployee").html());
+     });
+
+
+
+ 
+    </script>

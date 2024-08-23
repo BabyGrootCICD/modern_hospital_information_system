@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "KMU.HisOrder.Console.Gateway": {
+      "commandName": "Project"
+    },
+    "設定檔 1": {
+      "commandName": "Project"
+    }
+  }
+}

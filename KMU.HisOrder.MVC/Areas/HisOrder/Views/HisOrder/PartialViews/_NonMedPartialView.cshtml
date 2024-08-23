@@ -1,0 +1,197 @@
+﻿@model List<Hisorderplan>
+@{
+    List<KmuCoderef> locationItem = (List<KmuCoderef>)ViewData["NonMedLocation"];
+    //var locationItem = new Dictionary<string, string>() { { "1", "Laboratory 01" }, { "2", "Laboratory 02" } };
+    KMU.HisOrder.MVC.Areas.HisOrder.Models.PatientDTO _PatientDTO = (KMU.HisOrder.MVC.Areas.HisOrder.Models.PatientDTO)ViewData["PatientDTO"];
+}
+
+<div class="card-title pt-1 pr-1 pl-1">
+    <h6>Other</h6>
+
+    <span class=" ml-1 d-inline-block ">
+        <span id="nonmedorder_count" class="badge badge-pill badge-gray" style="font-size:13px;"></span>
+        <button class="ml-3 btn btn-sm btn-dark delete_nonmedorders"><i class="fa fas fas fa-trash"></i></button>
+        <button id="NonMedModalBtn" class="btn btn-sm  btn-primary" data-toggle="modal" data-target="#MedicalCategoryList"><i class="fa fas fa-plus"></i></button>
+        <button class="btn btn-sm  btn-primary add_nonmedorders" hidden><i class="fa fas fa-plus"></i> New</button>
+
+    </span>
+
+
+
+    @{
+        if (_PatientDTO != null && _PatientDTO.RegStatus != "N")
+        {
+
+            <span class=" ml-1 d-inline-block">
+                <span class="pt-function-column-br-color"></span>
+                <button id="NonMedPrint" class="btn btn-sm  btn-warning"><i class="fa fas fa-print"></i></button>
+            </span>
+        }
+    }
+
+</div>
+<div class="card mt-0" style="height: calc( 100% - 35px); ">
+    <div class="card-body card-body-border">
+        <!-- #region Test -->
+        <div id="nonmedorder_table" class="table-responsive table-sticky-wrapper" style="height: 100%; border-radius:3px;">
+            <table class=" table table-sm table-hover table-sticky">
+                <thead class=" tr-sticky">
+                    <tr class="text-center th-green" style="font-size: 13px;">
+                        <th style="width: 20px;"> <input type="checkbox" class="all" data-type="order_checkboxAll" data-child_name="nonMed_checkbox" /></th>
+                        <!-- <th>No.</th> -->
+                        <th style="width:3%">Status</th>
+                        <th style="width:3%" hidden></th>
+                        <th style="width:5%"></th>
+                        <th style="width:3%">ID</th>
+                        <th>Name</th>
+                        <th style="width:10%">Qty</th>
+                        <th>Spec</th>
+                        <th>Location</th>
+                        <th>Remarks</th>
+                        <th>Date</th>
+                        <th hidden>Seq</th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                    @*//nonmedorder templete*@
+                    <tr class="text-center nonmedorder_tr_templete" data-orderplan-id="-1" data-modify-type="" hidden>
+                        <td class="align-middle">
+                            <input type="checkbox" class="check nonmedorder_tr_templete" data-type="order_SingleCheckbox" name="nonMed_checkbox" />
+                        </td>
+                        <td class="align-middle"><span class="badge" data-status=""></span></td>
+                        <!-- lock/unlock -->
+                        <td class="align-middle lock-btn " hidden><span class="badge badge-success"><i class="fa fa-unlock"></i></span></td>
+                        <td class="align-middle" data-hplan-type=""><span class="badge"></span></td>
+                        <td class="align-middle" data-plan-code=""></td>
+                        <td class="align-middle text-left " data-plan-des=""></td>
+                        <td class="align-middle"><input type="text" class="form-control form-control-sm" data-plan-qty="" value=""></td>
+                        <td class="align-middle" data-hplan-Spec="">></td>
+                        <td class="align-middle">
+                            <select class="custom-select custom-select-sm" aria-placeholder="set location" data-location-code="">
+                                @{
+                                    <option value=""></option>
+                                    foreach (var option in locationItem)
+                                    {
+                                        <option value="@option.RefCode">@option.RefName</option>
+                                    }
+                                }
+                            </select>
+                        </td>
+                        <td class="align-middle">
+                            <input type="text" class="form-control form-control-sm" placeholder="..." data-remark="" value="">
+                        </td>
+                        <!--開立日期-->
+                        <td class="align-middle"></td>
+                        <td class="align-middle" data-seq-no="" hidden></td>
+                        <td class="align-middle" data-plan-type="" hidden></td>
+                    </tr>
+
+                    @{
+                        if (Model != null && Model.Count > 0)
+                        {
+                            foreach (var hplan in Model)
+                            {
+                                var orderStats = "";
+                                var orderStatsClass = "";
+                                @switch (hplan.Status)
+                                {
+                                    case '0':
+                                        orderStats = "Examining";
+                                        orderStatsClass = "badge-gray";
+                                        break;
+                                    case '2':
+                                        orderStats = "Cfm";
+                                        orderStatsClass = "badge-success";
+                                        break;
+                                }
+
+                                <tr class="text-center" data-orderplan-id="@hplan.Orderplanid" data-modify-type="">
+                                    <td class="align-middle">
+                                        <input type="checkbox" class="check" data-type="order_SingleCheckbox" name="nonMed_checkbox" />
+                                    </td>
+                                    <td class="align-middle"><span class="badge @orderStatsClass" data-status="@hplan.Status">@orderStats</span></td>
+                                    <!-- lock/unlock -->
+                                    <td class="align-middle lock-btn" hidden><span class="badge badge-success"><i class="fa fa-unlock"></i></span></td>
+                                    <td class="align-middle" data-hplan-type="@hplan.HplanType.Trim()">
+
+                                        @{
+                                            if (hplan.HplanType == "Lab")
+                                            {
+                                                <span class="badge badge-purple">Laboratory</span>
+                                            }
+                                            else if (hplan.HplanType == "Exam")
+                                            {
+                                                <span class="badge badge-info">Radiology</span>
+                                            }
+                                            else if (hplan.HplanType == "Path")
+                                            {
+                                                <span class="badge badge-master">Pathology</span>
+                                            }
+                                            else if (hplan.HplanType == "Blood")
+                                            {
+                                                <span class="badge badge-danger">Blood</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge badge-warning">Material</span>
+                                            }
+                                        }
+
+                                    </td>
+                                    <td class="align-middle" data-plan-code="@hplan.PlanCode.Trim()">@hplan.PlanCode.Trim()</td>
+                                    <td class="align-middle text-left" data-plan-des="@hplan.PlanDes.Trim()">@hplan.PlanDes.Trim()</td>
+                                    <td class="align-middle"><input type="text" class="form-control form-control-sm" data-plan-qty="@hplan.QtyDose" value="@hplan.QtyDose"></td>
+                                    @if (hplan.HplanType == "Blood")
+                                    {
+                                        <td class="align-middle">Route IV</td>
+                                    }
+                                    else
+                                    {
+                                        <td class="align-middle">N/A</td>
+                                    }
+
+                                        <td class="align-middle">
+                                            <select class="custom-select custom-select-sm" aria-placeholder="set location" data-location-code="@hplan.LocationCode">
+                                                @*<option selected></option>
+                                <option value="1">Laboratory 01</option>
+                                <option value="2">Laboratory 02</option>
+                                <option value="3">Laboratory 03</option>*@
+
+                                                @{
+                                                <option value=""></option>
+                                                foreach (var option in locationItem)
+                                                {
+                                                    if (option.RefCode == hplan.LocationCode)
+                                                    {
+                                                        <option selected="selected" value="@option.RefCode">@option.RefName</option>
+                                                    }
+                                                    else
+                                                    {
+                                                        <option value="@option.RefCode">@option.RefName</option>
+                                                    }
+                                                }
+                                            }
+                                        </select>
+                                    </td>
+                                    <td class="align-middle">
+                                        <input type="text" class="form-control form-control-sm" placeholder="..." data-remark="@hplan.Remark" value="@hplan.Remark">
+                                    </td>
+                                    <!--開立日期-->
+                                    <td class="align-middle">@Convert.ToDateTime(hplan.CreateDate).ToString("dd/MM/yyyy")</td>
+                                    <td class="align-middle" data-seq-no="@hplan.SeqNo" hidden></td>
+                                    <td class="align-middle" data-plan-type="@hplan.HplanType" hidden></td>
+                                </tr>
+                            }
+                        }
+
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+
+
+

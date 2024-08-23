@@ -1,0 +1,298 @@
+﻿@using KMU.HisOrder.MVC.Areas.HisOrder.Models;
+@using KMU.HisOrder.MVC.Areas.HisOrder.Controllers;
+@using Microsoft.AspNetCore.Http;
+@inject KMU.HisOrder.MVC.Models.KMUContext _context
+
+@model HistoryRecordDetail
+@{
+    Layout = null;
+    var CMDataList = Model.soapContext.Where(c => c.Kind == "CM").OrderBy(d => d.CreateDate).ToList();
+    var MGDataList = Model.soapContext.Where(c => c.Kind == "MG").OrderBy(d => d.CreateDate).ToList();
+    var CMData = Model.soapContext.Where(c => c.Kind == "CM").FirstOrDefault();
+    var MGData = Model.soapContext.Where(c => c.Kind == "MG").FirstOrDefault();
+    var targetid = "v-pills-" + Model.inhospid.ToString();
+    var MG_INFO = Model.MG_INFO;
+    var followCode = Model.RegFollowCode;
+    var inhospid = Model.inhospid;
+}
+
+<div class="tab-pane fade " id="@targetid" data-detail-id="@targetid" role="tabpanel" aria-labelledby="@targetid-tab" style="height: 100%">
+    <div style="height:100%">
+
+        <div class="card" style="background-color: white; height: auto; border-radius: 5px">
+
+            <!-- Clinic Remarks -->
+            <div class="card-title">
+                <h6 style=" border-left: 5px solid #2A3F54; padding-left: 10px; margin: 10px 5px 10px 10px; ">Clinic Remarks</h6>
+            </div>
+
+
+            @{
+                if (CMDataList != null && CMDataList.Count > 0)
+                {
+                    foreach (var data in CMDataList)
+                    {
+                        if (data != null)
+                        {
+                            <div class="card-body"
+                                 style=" font-size: 1rem; color: #2A3F54; background-color: whitesmoke; margin: 0px 25px 0px 25px; padding: 10px 15px 10px 15px; border-radius: 5px; ">
+                                @*@{ if (CMData != null)
+                { @CMData.pure_context;
+                }
+                }*@
+                                <pre class="text-primary">@data.CreateDate.ToString("dd/MM/yyyy HH:mm:ss")</pre>
+                                @data.pure_context;
+
+                            </div>
+                        }
+
+                    }
+                }
+                else
+                {
+                    <div class="card-body"
+                         style=" font-size: 1rem; color: #2A3F54; background-color: whitesmoke; margin: 0px 25px 0px 25px; padding: 10px 15px 10px 15px; border-radius: 5px; "></div>
+
+                }
+            }
+
+
+            <span class="section "
+                  style=" border-bottom: 1px solid #dfdfdf; width: calc(100% - 53px); margin: 15px 26px 5px 26px; "></span>
+
+            <!-- Management -->
+
+            <div class="card-title">
+                <h6 style=" border-left: 5px solid #2A3F54; padding-left: 10px; margin: 10px 5px 10px 10px; ">Management</h6>
+            </div>
+            <div class="card-body" style="  font-size: 1rem; color: #2A3F54; background-color: whitesmoke; margin: 0px 25px 5px 25px; padding: 5px 5px 0px 5px; border-radius: 8px;  ">
+                @{
+                    if (MG_INFO != null && MG_INFO.Count() > 0)
+                    {
+                        foreach (KmuCoderef info in MG_INFO)
+                        {
+                            if (string.IsNullOrWhiteSpace(followCode))
+                            {
+                                if (info.RefName == "None")
+                                {
+                                    <div class="mx-1 mb-1 form-check form-check-inline">
+                                        <input class="radio_transfer" type="radio" name="MG_INFO_@inhospid" id="MG_@info.RefName@inhospid" data-trans-code="@info.RefName" checked="checked">
+                                        <label class=" mb-0 ml-1 mr-2 text-dark" for="MG_@info.RefName@inhospid">@info.RefName</label>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="mx-1 mb-1 form-check form-check-inline" disabled>
+                                        <input class="radio_transfer" type="radio" name="MG_INFO_@inhospid" data-trans-code="@info.RefName" id="MG_@info.RefName@inhospid" disabled>
+                                        <label class=" mb-0 ml-1 mr-2 text-dark" for="MG_@info.RefName@inhospid">@info.RefName</label>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                if (info.RefName == followCode)
+                                {
+                                    <div class="mx-1 mb-1 form-check form-check-inline">
+                                        <input class="radio_transfer" type="radio" name="MG_INFO_@inhospid" id="MG_@info.RefName@inhospid" data-trans-code="@info.RefName" checked="checked">
+                                        <label class=" mb-0 ml-1 mr-2 text-dark" for="MG_@info.RefName@inhospid">@info.RefName</label>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="mx-1 mb-1 form-check form-check-inline">
+                                        <input class="radio_transfer" type="radio" name="MG_INFO_@inhospid" data-trans-code="@info.RefName" id="MG_@info.RefName@inhospid" disabled>
+                                        <label class=" mb-0 ml-1 mr-2 text-dark" for="MG_@info.RefName@inhospid">@info.RefName</label>
+                                    </div>
+                                }
+                            }
+
+
+                        }
+                    }
+                }
+            </div>
+            @{
+                if (MGDataList != null && MGDataList.Count > 0)
+                {
+                    foreach (var data in MGDataList)
+                    {
+                        if (data != null)
+                        {
+                            <div class="card-body"
+                                 style=" font-size: 1rem; color: #2A3F54; background-color: whitesmoke; margin: 0px 25px 0px 25px; padding: 10px 15px 10px 15px; border-radius: 8px; ">
+                                @*@{
+                                    if (MGData != null)
+                                    {
+                                        @MGData.pure_context;
+                                    }
+                                }*@
+
+                                <pre class="text-primary">@data.CreateDate.ToString("dd/MM/yyyy HH:mm:ss")</pre>
+                                @data.pure_context;
+
+
+                            </div>
+                        }
+                    }
+                }
+                else
+                {
+                    <div class="card-body"
+                         style=" font-size: 1rem; color: #2A3F54; background-color: whitesmoke; margin: 0px 25px 0px 25px; padding: 10px 15px 10px 15px; border-radius: 5px; "></div>
+                }
+
+            }
+            <span class="section "
+                  style=" border-bottom: 1px solid #dfdfdf; width: calc(100% - 53px); margin: 15px 26px 5px 26px; "></span>
+
+            <!-- Diagnosis -->
+
+
+            <div class="card-title">
+                <h6 style=" border-left: 5px solid #2A3F54; padding-left: 10px; margin: 10px 5px 10px 10px; ">Diagnosis</h6>
+            </div>
+
+            <div class="card-body"
+                 style=" font-size: 1rem; color: #2A3F54; background-color: whitesmoke; margin: 0px 25px 0px 25px; padding: 10px 15px 10px 15px; border-radius: 8px; ">
+
+                @{
+                    if (Model != null && Model.DiagnosisContext != null)
+                    {
+                        var count = 1;
+                        foreach (var obj in Model.DiagnosisContext)
+                        {
+                            <h6>
+                                @string.Format("{0}. {1} {2}", count, obj.PlanCode, obj.PlanDes);
+                            </h6>
+
+                            count++;
+                        }
+                    }
+                }
+            </div>
+
+            <span class="section "
+                  style=" border-bottom: 1px solid #dfdfdf; width: calc(100% - 53px); margin: 15px 26px 5px 26px; "></span>
+
+            <!-- Medicine -->
+
+            <div class="card-title">
+                <h6 style=" border-left: 5px solid #2A3F54; padding-left: 10px; margin: 10px 5px 10px 10px; ">Medicine</h6>
+            </div>
+
+            <div class="card-body"
+                 style=" font-size: 1rem; color: #2A3F54; background-color: whitesmoke; margin: 0px 25px 0px 25px; padding: 10px 15px 10px 15px; border-radius: 8px; ">
+                <table class="table table-sm">
+                    <tr class="text-center" style="font-size: 13px;">
+                        <th class="align-middle text-left" style="width: 3% " hidden>bg.</th>
+                        <th class="align-middle text-left" style="width: 20%">Medication</th>
+                        <th class="align-middle text-left" style="width: 5% ">SingleDose</th>
+                        <th class="align-middle text-left">Unit</th>
+                        <th class="align-middle text-left" style="width: 10%">Route</th>
+                        <th class="align-middle text-left" style="width: 10%">Freq.</th>
+                        <th class="align-middle text-left" style="width: 10%" hidden>Indic.</th>
+                        <th class="align-middle text-left" style="width: 10%" hidden>DailyDose</th>
+                        <th class="align-middle text-left" style="width: 6%">Days</th>
+                        <th class="align-middle text-left" style="width: 9%">Qty.</th>
+                        <th class="align-middle text-left">Remarks</th>
+                        <th class="align-middle text-left">Date</th>
+                    </tr>
+                    <tbody>
+
+                        @{
+                            if (Model != null && Model.MedicineContext != null)
+                            {
+
+                                foreach (Hisorderplan obj in Model.MedicineContext)
+                                {
+                                    <tr class="text-center" style="font-size:0.85em">
+                                        <!-- bg. -->
+                                        <td hidden class="align-middle">@obj.MedBag</td>
+                                        <!-- name -->
+                                        <td class="align-middle text-left autoCut">@obj.PlanDes</td>
+                                        <!-- SgDose 次量   data-qty-dose-->
+                                        <td class="align-middle text-left">@obj.QtyDose</td>
+                                        <!-- unit 單位-->
+                                        <td class="align-middle color-primary text-left">@obj.UnitDose</td>
+                                        <!-- path 途徑-->
+                                        <td class="align-middle text-left">@obj.DosePath</td>
+                                        <!-- freq 頻次-->
+                                        <td class="align-middle text-left">@obj.FreqCode</td>
+                                        <!-- inidcation 指示-->
+                                        <td hidden class="align-middle text-left">@obj.DoseIndication</td>
+                                        <!-- DailyDose 日量 data-qty-daily -->
+                                        <td hidden class="align-middle text-left">@obj.QtyDaily</td>
+                                        <!-- Days 天數 data-plan-days -->
+                                        <td class="align-middle text-left">@obj.PlanDays</td>
+                                        <!-- TotalDose 總量 data-total-qty-->
+                                        <td class="align-middle text-left">@obj.TotalQty</td>
+                                        <!-- Remarks 備註-->
+                                        <td class="align-middle text-left">@obj.Remark</td>
+                                        <!-- Date 開立時間-->
+                                        <td class="align-middle text-left">@Convert.ToDateTime(obj.CreateDate).ToString("dd/MM/yyyy")</td>
+                                    </tr>
+                                }
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <span class="section "
+                  style=" border-bottom: 1px solid #dfdfdf; width: calc(100% - 53px); margin: 15px 26px 5px 26px; "></span>
+
+
+            <!-- Other -->
+            <div class="card-title">
+                <h6 style=" border-left: 5px solid #2A3F54; padding-left: 10px; margin: 10px 5px 10px 10px; ">Other</h6>
+            </div>
+
+            <div class="card-body"
+                 style=" font-size: 1rem; color: #2A3F54; background-color: whitesmoke; margin: 0px 25px 0px 25px; padding: 10px 15px 10px 15px; border-radius: 8px; ">
+                <table class=" table table-sm ">
+                    <tr class="text-center th-green" style="font-size: 13px;">
+                        <th class="align-middle text-left" style="width:3%">ID</th>
+                        <th class="align-middle text-left" style="width:19%">Name</th>
+                        <th class="align-middle text-left" style="width:10%">Qty</th>
+                        <th class="align-middle text-left">Spec</th>
+                        <th class="align-middle text-left">Location</th>
+                        <th class="align-middle text-left">Remarks</th>
+                        <th class="align-middle text-left">Date</th>
+                    </tr>
+                    <tbody>
+                        @{
+                            if (Model != null && Model.NonMedContext != null)
+                            {
+                                foreach (Hisorderplan obj in Model.NonMedContext)
+                                {
+                                    <tr class="text-center" style="font-size:0.85em">
+                                        <td class="align-middle text-left">@obj.PlanCode</td>
+                                        <td class="align-middle text-left autoCut ">@obj.PlanDes</td>
+                                        <td class="align-middle text-left">@obj.QtyDose</td>
+                                        <td class="align-middle text-left">N/A</td>
+                                        <td class="align-middle text-left">@obj.LocationCode</td>
+                                        <td class="align-middle text-left">@obj.Remark</td>
+                                        <!-- Date 開立時間-->
+                                        <td class="align-middle text-left">@Convert.ToDateTime(obj.CreateDate).ToString("dd/MM/yyyy")</td>
+                                    </tr>
+                                }
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <span class="section "
+                  style=" border-bottom: 1px solid #dfdfdf; width: calc(100% - 53px); margin: 15px 26px 5px 26px; "></span>
+
+            @*@if(dptParent == "3000")
+            {
+                // <button onclick="ShowModal2('@Url.Action("History","Ncd", new {id = regHealthId, inhospitalId = inhospid, healthId = regHealthId ,date = regDate},Context.Request.Scheme)','Noncommunicable diseases(NCD) - History')" class="float-end btn btn-primary">Ncd History</button>
+
+                <button onclick="ShowModal1('@Url.Action("History","Ncd", new {id = regHealthId, inhospitalId = inhospid, healthId = regHealthId ,date = regDate},Context.Request.Scheme)','Noncommunicable diseases(NCD) - History')" class="float-end btn btn-primary">Ncd History</button>
+           
+            }
+            *@
+        </div>
+    </div>
+</div>
