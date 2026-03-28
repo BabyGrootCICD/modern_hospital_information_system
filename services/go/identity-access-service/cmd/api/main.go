@@ -1,14 +1,19 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
+	"log"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/segmentio/kafka-go"
 )
 
 type LoginRequest struct {
@@ -46,6 +51,31 @@ func bearerToken(header string) string {
 	return strings.TrimSpace(parts[1])
 }
 
+func publishEvent(topic string, payload any) {
+	brokers := os.Getenv("KAFKA_BROKERS")
+	if brokers == "" {
+		return
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("failed to marshal event: %v", err)
+		return
+	}
+
+	writer := &kafka.Writer{
+		Addr:     kafka.TCP(strings.Split(brokers, ",")...),
+		Topic:    topic,
+		Balancer: &kafka.LeastBytes{},
+	}
+	defer writer.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := writer.WriteMessages(ctx, kafka.Message{Key: []byte(time.Now().UTC().Format(time.RFC3339Nano)), Value: encoded}); err != nil {
+		log.Printf("failed to publish event to %s: %v", topic, err)
+	}
+}
+
 func main() {
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -78,6 +108,13 @@ func main() {
 		sessionsMu.Lock()
 		sessions[token] = session
 		sessionsMu.Unlock()
+		publishEvent("identity.events", gin.H{
+			"type":       "auth.login",
+			"username":   session.Username,
+			"role":       session.Role,
+			"tenant":     session.Tenant,
+			"created_at": time.Now().UTC(),
+		})
 
 		c.JSON(http.StatusOK, session)
 	})

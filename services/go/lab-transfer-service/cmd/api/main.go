@@ -1,13 +1,19 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
+	"encoding/json"
 	"encoding/hex"
+	"log"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/segmentio/kafka-go"
 )
 
 type CreateTransferRequest struct {
@@ -39,6 +45,31 @@ func newID() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(raw), nil
+}
+
+func publishEvent(topic string, payload any) {
+	brokers := os.Getenv("KAFKA_BROKERS")
+	if brokers == "" {
+		return
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("failed to marshal event: %v", err)
+		return
+	}
+
+	writer := &kafka.Writer{
+		Addr:     kafka.TCP(strings.Split(brokers, ",")...),
+		Topic:    topic,
+		Balancer: &kafka.LeastBytes{},
+	}
+	defer writer.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := writer.WriteMessages(ctx, kafka.Message{Key: []byte(time.Now().UTC().Format(time.RFC3339Nano)), Value: encoded}); err != nil {
+		log.Printf("failed to publish event to %s: %v", topic, err)
+	}
 }
 
 func main() {
@@ -77,6 +108,15 @@ func main() {
 		transfersMu.Lock()
 		transfers[id] = transfer
 		transfersMu.Unlock()
+		publishEvent("transfer.events", gin.H{
+			"type":        "transfer.created",
+			"transfer_id": transfer.ID,
+			"patient_id":  transfer.PatientID,
+			"source_site": transfer.SourceSite,
+			"target_site": transfer.TargetSite,
+			"status":      transfer.Status,
+			"created_at":  transfer.CreatedAt,
+		})
 
 		c.JSON(http.StatusCreated, transfer)
 	})
@@ -106,6 +146,12 @@ func main() {
 		transfer.UpdatedAt = time.Now().UTC()
 		transfers[id] = transfer
 		transfersMu.Unlock()
+		publishEvent("transfer.events", gin.H{
+			"type":        "transfer.completed",
+			"transfer_id": transfer.ID,
+			"status":      transfer.Status,
+			"updated_at":  transfer.UpdatedAt,
+		})
 		c.JSON(http.StatusOK, transfer)
 	})
 

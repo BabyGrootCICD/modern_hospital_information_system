@@ -1,18 +1,24 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
+	"encoding/json"
 	"encoding/hex"
+	"log"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/segmentio/kafka-go"
 )
 
 type CreateSyncJobRequest struct {
-	Mode      string `json:"mode"`
-	Hospital  string `json:"hospital"`
+	Mode       string `json:"mode"`
+	Hospital   string `json:"hospital"`
 	PayloadRef string `json:"payload_ref"`
 }
 
@@ -37,6 +43,31 @@ func randomID() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(raw), nil
+}
+
+func publishEvent(topic string, payload any) {
+	brokers := os.Getenv("KAFKA_BROKERS")
+	if brokers == "" {
+		return
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("failed to marshal event: %v", err)
+		return
+	}
+
+	writer := &kafka.Writer{
+		Addr:     kafka.TCP(strings.Split(brokers, ",")...),
+		Topic:    topic,
+		Balancer: &kafka.LeastBytes{},
+	}
+	defer writer.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := writer.WriteMessages(ctx, kafka.Message{Key: []byte(time.Now().UTC().Format(time.RFC3339Nano)), Value: encoded}); err != nil {
+		log.Printf("failed to publish event to %s: %v", topic, err)
+	}
 }
 
 func main() {
@@ -79,6 +110,14 @@ func main() {
 		jobsMu.Lock()
 		jobs[id] = job
 		jobsMu.Unlock()
+		publishEvent("sync.events", gin.H{
+			"type":       "sync.created",
+			"sync_id":    job.ID,
+			"mode":       job.Mode,
+			"hospital":   job.Hospital,
+			"status":     job.Status,
+			"created_at": job.CreatedAt,
+		})
 
 		c.JSON(http.StatusCreated, job)
 	})
@@ -96,6 +135,12 @@ func main() {
 		job.UpdatedAt = time.Now().UTC()
 		jobs[id] = job
 		jobsMu.Unlock()
+		publishEvent("sync.events", gin.H{
+			"type":      "sync.running",
+			"sync_id":   job.ID,
+			"status":    job.Status,
+			"updated_at": job.UpdatedAt,
+		})
 		c.JSON(http.StatusOK, job)
 	})
 
@@ -112,6 +157,12 @@ func main() {
 		job.UpdatedAt = time.Now().UTC()
 		jobs[id] = job
 		jobsMu.Unlock()
+		publishEvent("sync.events", gin.H{
+			"type":      "sync.completed",
+			"sync_id":   job.ID,
+			"status":    job.Status,
+			"updated_at": job.UpdatedAt,
+		})
 		c.JSON(http.StatusOK, job)
 	})
 

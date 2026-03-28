@@ -29,6 +29,8 @@ services:
     image: golang:1.23-alpine
     working_dir: /workspace
     command: sh -c "go run ./cmd/api"
+    environment:
+      KAFKA_BROKERS: kafka:9092
     volumes:
       - ../services/go/identity-access-service:/workspace
     ports:
@@ -38,6 +40,8 @@ services:
     image: golang:1.23-alpine
     working_dir: /workspace
     command: sh -c "go run ./cmd/api"
+    environment:
+      KAFKA_BROKERS: kafka:9092
     volumes:
       - ../services/go/lab-transfer-service:/workspace
     ports:
@@ -59,6 +63,8 @@ services:
     image: golang:1.23-alpine
     working_dir: /workspace
     command: sh -c "go run ./cmd/api"
+    environment:
+      KAFKA_BROKERS: kafka:9092
     volumes:
       - ../services/go/sync-gateway-service:/workspace
     ports:
