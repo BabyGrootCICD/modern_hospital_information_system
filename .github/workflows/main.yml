@@ -36,6 +36,10 @@ jobs:
         run: go build ./...
         working-directory: services/go/${{ matrix.service }}
 
+      - name: Vet service
+        run: go vet ./...
+        working-directory: services/go/${{ matrix.service }}
+
   rust-backend:
     runs-on: ubuntu-latest
     strategy:
@@ -90,6 +94,9 @@ jobs:
           test -f docs/phase2-implementation-status.md
           test -f docs/phase3-implementation-status.md
           test -f docs/phase4-implementation-status.md
+          test -f docs/phase5-implementation-status.md
+          test -f infra/observability/prometheus/prometheus.yml
+          test -f infra/observability/otel-collector/config.yaml
 
   codeql:
     runs-on: ubuntu-latest

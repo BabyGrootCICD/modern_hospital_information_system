@@ -12,6 +12,8 @@ Status: Kickoff implemented; durable event pipeline hardening pending.
   - `infra/kafka/bootstrap-topics.sh`
 - Runtime wiring:
   - `KAFKA_BROKERS` env injected via compose for Go services.
+- Phase 5 integration linkage:
+  - Prometheus now scrapes all Go service metrics while event endpoints are active.
 
 ## Pending for full Phase 4 completion
 

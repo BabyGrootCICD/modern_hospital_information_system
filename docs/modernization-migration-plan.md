@@ -9,12 +9,13 @@
   - Phase 3 kickoff (Supabase-oriented patient-chart service integration and SQL migration baseline).
   - Legacy .NET backend projects removed from repository and delivery path.
   - Phase 4 kickoff (Kafka event emission hooks in Go services).
+  - Phase 5 kickoff (Prometheus metrics endpoints across Go services + Prometheus/OTEL stack wiring).
 - In progress:
   - Service persistence hardening (move in-memory stores to Supabase/Redis).
   - Contract stabilization across BFF and microservices.
 - Not started:
   - Kafka outbox/event stream consumers and replay handling.
-  - full observability SLO dashboards.
+  - full observability SLO dashboards and alert policies.
   - blockchain anchoring pilot implementation.
 
 ## 1) Current-State Scan Summary
@@ -108,6 +109,17 @@
 - Instrument OpenTelemetry in Next.js, Go, Rust.
 - Publish golden signals dashboards in Grafana by service and by hospital tenant.
 - Define and monitor SLOs for auth success latency, chart retrieval latency, sync completion SLA, and audit-verification latency.
+
+### Phase 5 Current State
+- Implemented:
+  - `/metrics` endpoint on Go APIs (`identity`, `patient-chart`, `order-clinical`, `lab-transfer`, `sync-gateway`).
+  - Prometheus scrape config and compose deployment.
+  - OTEL collector base config and compose deployment.
+  - Grafana default datasource switched to Prometheus.
+- Pending:
+  - service trace exporters and context propagation standardization.
+  - production-grade dashboards/alerts per SLO.
+  - log and trace backends (Loki/Tempo) full integration.
 
 ### Phase 6: Legacy decommission
 - Decommission remaining non-Go/Rust backend dependencies after acceptance and legal sign-off.

@@ -30,6 +30,7 @@ Extract backend capabilities from legacy monolith boundaries into independently 
 - In-memory storage only (no Redis/Kafka/Supabase persistence yet).
 - No service-to-service auth tokens yet.
 - Kafka publish hooks now exist, but outbox + durable consumer flows are still pending.
+- Metrics endpoints now exist, but SLO alerting and trace correlation are pending.
 
 ## Next incremental step
 

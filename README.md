@@ -20,9 +20,10 @@ docker compose -f infra/docker-compose.modern.yml up -d
 - `/api/lab/*` -> lab-transfer-service
 - `/api/sync/*` -> sync-gateway-service
 - `/grafana/*` -> Grafana
+- `/prometheus/*` -> Prometheus
 
 ## Notes
 
 - .NET backend projects were intentionally removed.
 - Legacy SQL snapshots remain in repository root as migration references.
-- Detailed phase progress is maintained in `docs/phase*-implementation-status.md`.
+- Detailed phase progress is maintained in `docs/phase*-implementation-status.md` (Phase 1-5).
