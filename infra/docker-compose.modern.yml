@@ -14,6 +14,8 @@ services:
       - order-clinical-service
       - lab-transfer-service
       - sync-gateway-service
+      - audit-integrity-service
+      - document-proof-service
       - grafana
       - prometheus
       - redis
@@ -91,6 +93,24 @@ services:
       - ../services/go/order-clinical-service:/workspace
     ports:
       - "8083:8083"
+
+  audit-integrity-service:
+    image: rust:1.81
+    working_dir: /workspace
+    command: sh -c "cargo run"
+    volumes:
+      - ../services/rust/audit-integrity-service:/workspace
+    ports:
+      - "8091:8091"
+
+  document-proof-service:
+    image: rust:1.81
+    working_dir: /workspace
+    command: sh -c "cargo run"
+    volumes:
+      - ../services/rust/document-proof-service:/workspace
+    ports:
+      - "8092:8092"
 
   redis:
     image: redis:7.4-alpine
