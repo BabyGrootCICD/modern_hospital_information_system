@@ -14,6 +14,7 @@
   - Phase 7 kickoff (Supabase persistence hooks and reconciliation endpoints for Rust integrity/proof services).
   - Phase 8 kickoff (retry queues + background reconciliation workers for failed integrity/proof persistence).
   - Phase 9 kickoff (failure-threshold dead-letter handling for integrity/proof retry flows).
+  - Phase 10 kickoff (Redis-backed retry/dead-letter durability + dead-letter replay endpoints for Rust services).
 - In progress:
   - Service persistence hardening (move in-memory stores to Supabase/Redis).
   - Contract stabilization across BFF and microservices.
@@ -170,11 +171,13 @@
   - both Rust services now support optional Supabase persistence and reconciliation endpoints.
   - Next.js BFF proxy routes and Nginx ingress routes are in place for these Rust services.
   - both Rust services now route repeated persistence failures into dead-letter stores with configurable retry thresholds.
+  - retry/dead-letter state now reloads from and persists to Redis for both Rust services.
+  - dead-letter replay endpoints are now available for operator-driven recovery.
 - Pending:
   - replace simulated anchor with real blockchain transaction submission.
   - persist integrity/proof records to Supabase.
   - define legal/audit report format and retention policies.
-  - move retry/dead-letter queues to durable backend (Redis/Supabase) instead of process memory.
+  - add durable cross-instance queue coordination (current Redis persistence is snapshot-based and app-level).
 
 ### Integrity verification features to implement
 - `VerifyRecord(record_id)` API returns current digest, historical digest chain, anchored Merkle proof, and chain transaction reference.
@@ -204,7 +207,7 @@
 ## 10) Immediate Next Actions
 
 1. Replace in-memory stores in `identity`, `lab-transfer`, and `sync-gateway` with Supabase + Redis.
-2. Move Rust retry/dead-letter state to Redis/Supabase tables and expose dead-letter replay endpoint.
-3. Introduce Kafka topic contracts and outbox tables for transfer/sync/audit/retry events.
-4. Add service-to-service auth and tenant propagation headers.
-5. Implement Grafana dashboards and SLO alerts before broader production traffic cutover.
+2. Introduce Kafka topic contracts and outbox tables for transfer/sync/audit/retry/dead-letter events.
+3. Add service-to-service auth and tenant propagation headers.
+4. Add Grafana dashboards for retry/dead-letter depth, replay volume, and persistence failure rates.
+5. Implement Grafana SLO alerts before broader production traffic cutover.

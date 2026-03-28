@@ -32,6 +32,7 @@ Status: Integrity/blockchain pilot APIs implemented with simulated anchoring.
 - Added reconcile endpoints to check whether integrity/proof records are persisted.
 - Added retry queue status and retry run endpoints plus background retry workers.
 - Added dead-letter handling and dead-letter inspection endpoints with `RETRY_MAX_ATTEMPTS` threshold control.
+- Added Redis-backed retry/dead-letter state persistence and dead-letter replay endpoints.
 
 ## Next step
 

@@ -23,4 +23,4 @@ Status: Kickoff implemented; durable event pipeline hardening pending.
 - Audit event stream integration with Rust integrity services.
 - Event-driven trigger from transfer/sync completion to integrity event creation.
 - Durable outbox integration with integrity/proof persistence flows.
-- Retry/dead-letter events should be emitted to Kafka in the next pass for failure observability.
+- Retry/dead-letter events should be emitted to Kafka in the next pass for failure observability (Redis durability is now in place).

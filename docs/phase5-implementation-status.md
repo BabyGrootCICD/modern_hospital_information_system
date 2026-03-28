@@ -30,3 +30,4 @@ Status: Kickoff implemented; SLO and tracing hardening pending.
 - Reconciliation result metrics for Supabase persistence health.
 - Retry queue depth metrics for integrity/proof services.
 - Dead-letter queue depth and drain-rate metrics for integrity/proof services.
+- Redis persistence availability metrics for retry/dead-letter queue state.

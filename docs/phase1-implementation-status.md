@@ -9,6 +9,7 @@ Integrity note: frontend BFF now also proxies integrity/proof APIs from Rust ser
 Durability note: integrity/proof APIs now expose reconciliation endpoints for persistence checks.
 Reliability note: integrity/proof APIs now include retry queue status and manual retry trigger endpoints.
 Resilience note: integrity/proof retries now include dead-letter routing with configurable failure thresholds.
+Durability note: integrity/proof retry/dead-letter state now persists to Redis and supports dead-letter replay endpoints.
 
 ## Completed in this batch
 

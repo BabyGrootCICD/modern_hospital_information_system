@@ -28,12 +28,12 @@ Introduce failure-threshold routing for retry workflows and expose dead-letter v
 
 ## Current limits
 
-- Retry and dead-letter queues are still in-memory and reset on service restart.
-- No dead-letter replay endpoint yet.
+- Retry and dead-letter queues now persist in Redis and restore on service startup.
 - No Kafka events for retry/dead-letter transitions yet.
+- No authorization/audit guard exists yet for dead-letter replay operations.
 
 ## Next step
 
-- Persist retry/dead-letter state in Redis/Supabase.
-- Add controlled dead-letter replay endpoint.
 - Emit retry/dead-letter lifecycle events to Kafka and add Grafana panels.
+- Add operator authorization and audit trail for dead-letter replay.
+- Evolve Redis snapshot persistence into coordinated consumer-safe queue semantics.

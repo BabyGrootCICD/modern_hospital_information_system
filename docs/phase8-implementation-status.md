@@ -1,6 +1,7 @@
 # Phase 8 Implementation Status
 
 Status: Reliability hardening implemented for integrity/proof persistence retries; Phase 9 threshold routing is active.
+Phase 10 note: retry/dead-letter state is now persisted to Redis with replay endpoints.
 
 ## Implemented
 
@@ -19,15 +20,17 @@ Status: Reliability hardening implemented for integrity/proof persistence retrie
 - Failure threshold routing:
   - `RETRY_MAX_ATTEMPTS` env support in both Rust services (default `3`)
   - retries beyond threshold move into dead-letter queue
+- Durability and replay:
+  - retry/dead-letter snapshots are persisted to Redis
+  - startup restores retry/dead-letter state from Redis
+  - replay endpoints move dead-letter records back to retry queue
 
 ## Current limits
 
-- Retry queues are process-memory only (lost on restart).
-- Dead-letter queues are process-memory only (lost on restart).
+- Redis state persistence is snapshot-style per service process and not yet multi-consumer coordinated.
 - No Kafka event emission for retry/dead-letter outcomes yet.
 
 ## Next step
 
-- Move retry and dead-letter queue state to Redis/Supabase tables.
 - Emit retry success/failure/dead-letter events to Kafka.
-- Add dead-letter replay endpoint with operator authorization.
+- Add dead-letter replay authorization controls and operator audit events.

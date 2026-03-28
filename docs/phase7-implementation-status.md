@@ -31,3 +31,4 @@ Status: Durability hardening in progress for integrity/proof services.
 - Manual retry trigger and queue status endpoints implemented.
 - Dead-letter handling and dead-letter inspection endpoints implemented.
 - Kafka persistence/dead-letter events remain pending.
+- Redis-backed retry/dead-letter durability and replay APIs implemented.

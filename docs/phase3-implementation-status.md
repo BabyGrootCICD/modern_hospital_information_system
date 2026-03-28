@@ -28,3 +28,4 @@ Status: Kickoff implemented (schema baseline + service integration); migration e
 - Reconciliation endpoints can now be used to validate Supabase persistence readiness.
 - Retry queue status and retry execution endpoints now support persistence recovery workflows.
 - Dead-letter queue inspection endpoints now support triage for repeated persistence failures.
+- Retry/dead-letter state can now recover after restarts via Redis persistence in both Rust services.
