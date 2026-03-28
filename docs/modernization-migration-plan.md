@@ -1,18 +1,44 @@
 # SHIS Modernization Migration Plan
 
+## 0) Live Progress Snapshot (2026-03-28)
+
+- Completed:
+  - Phase 0 foundation scaffolding (Next.js, Go, Rust, infra baseline).
+  - Phase 1 frontend shell (locale routing, session auth scaffold, protected pages, BFF endpoints, Nginx routes).
+  - Phase 2 backend kickoff (identity, lab-transfer, sync-gateway APIs and ingress routes).
+  - Phase 3 kickoff (Supabase-oriented patient-chart service integration and SQL migration baseline).
+  - Legacy .NET backend projects removed from repository and delivery path.
+  - Phase 4 kickoff (Kafka event emission hooks in Go services).
+  - Phase 5 kickoff (Prometheus metrics endpoints across Go services + Prometheus/OTEL stack wiring).
+  - Integrity pilot kickoff (Rust digest chain + Merkle root + proof anchor APIs).
+  - Phase 7 kickoff (Supabase persistence hooks and reconciliation endpoints for Rust integrity/proof services).
+  - Phase 8 kickoff (retry queues + background reconciliation workers for failed integrity/proof persistence).
+  - Phase 9 kickoff (failure-threshold dead-letter handling for integrity/proof retry flows).
+  - Phase 10 kickoff (Redis-backed retry/dead-letter durability + dead-letter replay endpoints for Rust services).
+  - Phase 11 kickoff (containerization: Dockerfiles for all Go/Rust services + build-based compose stack).
+  - Phase 12 kickoff (Go Redis durability, Kafka outbox/DLQ + idempotent consumer baseline, JWT tenant propagation, observability stack completion, blockchain adapter/reporting, CI + Robot e2e baseline).
+- In progress:
+  - Service persistence hardening (move remaining in-memory state to Supabase tables where needed).
+  - Contract stabilization across BFF and microservices.
+  - Kafka consumer expansion beyond `sync.commands` baseline.
+  - Security hardening for internal service auth key management and rotation.
+  - CI workflow split and stabilization for backend vs frontend/infra delivery lanes.
+  - End-to-end container deployment hardening (healthchecks, rollout policy, image publishing workflow).
+- Not started:
+  - full production chain adapter integration and chain transaction finality verification.
+  - legal/compliance sign-off workflow for generated audit reports.
+
 ## 1) Current-State Scan Summary
 
 ### Existing solution layout
-- `SHIS.HisOrder.MVC` (`net6.0`): monolithic ASP.NET MVC + Razor + SignalR + EF Core/PostgreSQL.
-- `SHIS.MOHD.WebAPI` (`net6.0`): JWT-based API for MOHD-side records and upload tasks.
-- `SHIS.Lab.WebAPI` (`net6.0`): transfer-data API with EF migrations and Swagger.
-- `SHIS.HisOrder.Console.Gateway` (`net6.0`): console/offline synchronization gateway with import/export flow.
-- SQL snapshots/dumps exist at repository root, indicating schema-first operational history.
+- Legacy .NET projects were present originally but are now removed from repository.
+- Active backend stack is Go-Gin microservices + Rust services.
+- SQL snapshots/dumps at repository root remain as migration references.
 
 ### Key migration implications
-- Domain logic is spread across MVC areas/controllers/services; needs explicit bounded-context split before service extraction.
-- Offline synchronization in console gateway is business-critical and should become first-class microservice workflows.
-- Existing PostgreSQL usage lowers migration risk to Supabase (also PostgreSQL), but schema governance and auth model must be redesigned.
+- Domain logic originated in the legacy monolith and still requires domain-by-domain parity validation.
+- Offline synchronization remains business-critical and is now modeled in `sync-gateway-service`.
+- Existing PostgreSQL usage lowers migration risk to Supabase (also PostgreSQL), but schema governance and auth model still requires hardening.
 
 ## 2) Target Architecture (Modern Stack)
 
@@ -46,7 +72,7 @@
 3. `order-clinical-service` (Go)
 - SOAP/order flows migrated from MVC areas.
 4. `lab-transfer-service` (Go)
-- ownership of current `SHIS.Lab.WebAPI` transfer responsibilities.
+- ownership of legacy transfer responsibilities.
 5. `sync-gateway-service` (Go)
 - replace console gateway import/export with API + worker model.
 6. `audit-integrity-service` (Rust)
@@ -55,9 +81,9 @@
 - record digest creation, Merkle root generation, chain anchoring adapter.
 
 ### Anti-corruption layer during migration
-- Keep legacy .NET apps running behind Nginx while new services are carved out.
-- Add API facade layer to prevent frontend coupling to legacy controllers.
+- Keep API facade/BFF boundaries to isolate frontend from direct service coupling.
 - Migrate by capability, not by project file.
+- Maintain compatibility contracts for any remaining external legacy dependencies.
 
 ## 4) Phased Execution Plan
 
@@ -94,10 +120,20 @@
 - Publish golden signals dashboards in Grafana by service and by hospital tenant.
 - Define and monitor SLOs for auth success latency, chart retrieval latency, sync completion SLA, and audit-verification latency.
 
+### Phase 5 Current State
+- Implemented:
+  - `/metrics` endpoint on Go APIs (`identity`, `patient-chart`, `order-clinical`, `lab-transfer`, `sync-gateway`).
+  - Prometheus scrape config and compose deployment.
+  - OTEL collector base config and compose deployment.
+  - Grafana default datasource switched to Prometheus.
+- Pending:
+  - service trace exporters and context propagation standardization.
+  - production-grade dashboards/alerts per SLO.
+  - log and trace backends (Loki/Tempo) full integration.
+
 ### Phase 6: Legacy decommission
-- Freeze legacy .NET write paths.
-- Run read-only mode for rollback window.
-- Decommission MVC/WebAPI/console components after acceptance and legal sign-off.
+- Decommission remaining non-Go/Rust backend dependencies after acceptance and legal sign-off.
+- Keep rollback runbooks and cutover metrics for 30-day post-cutover period.
 
 ## 5) Infrastructure Rollout Order (Requested Components)
 
@@ -133,6 +169,21 @@
 2. Public L2 anchoring (e.g., Polygon):
 - low cost, strong external timestamping, simpler verification tooling.
 
+### Pilot implementation status
+- Implemented:
+  - `audit-integrity-service` now supports event hashing, chain verification, and Merkle-root generation APIs.
+  - `document-proof-service` now supports proof anchoring and anchor verification APIs (simulated chain metadata).
+  - both Rust services now support optional Supabase persistence and reconciliation endpoints.
+  - Next.js BFF proxy routes and Nginx ingress routes are in place for these Rust services.
+  - both Rust services now route repeated persistence failures into dead-letter stores with configurable retry thresholds.
+  - retry/dead-letter state now reloads from and persists to Redis for both Rust services.
+  - dead-letter replay endpoints are now available for operator-driven recovery.
+- Pending:
+  - replace simulated anchor with real blockchain transaction submission.
+  - persist integrity/proof records to Supabase.
+  - define legal/audit report format and retention policies.
+  - add durable cross-instance queue coordination (current Redis persistence is snapshot-based and app-level).
+
 ### Integrity verification features to implement
 - `VerifyRecord(record_id)` API returns current digest, historical digest chain, anchored Merkle proof, and chain transaction reference.
 - “break-glass” alert if verification fails, with incident workflow.
@@ -160,8 +211,32 @@
 
 ## 10) Immediate Next Actions
 
-1. Approve service boundaries and migration order in this document.
-2. Decide blockchain mode:
-- consortium only, public L2 anchoring, or dual anchor (highest assurance).
-3. Create implementation epics from phases (frontend, services, data, infra, integrity).
-4. Start Phase 0 with baseline repository and CI/CD scaffolding.
+1. Replace in-memory stores in `identity`, `lab-transfer`, and `sync-gateway` with Supabase + Redis.
+2. Introduce Kafka topic contracts and outbox tables for transfer/sync/audit/retry/dead-letter events.
+3. Add service-to-service auth and tenant propagation headers.
+4. Add Grafana dashboards for retry/dead-letter depth, replay volume, and persistence failure rates.
+5. Implement Grafana SLO alerts before broader production traffic cutover.
+
+## 11) Remaining Phases / TODOs (Post-Phase 11)
+
+1. Complete data durability migration for Go services:
+- replace in-memory session/transfer/sync job stores with Supabase + Redis.
+2. Complete event backbone hardening:
+- add transactional outbox and idempotent consumers with replay and dead-letter semantics.
+3. Complete auth and tenancy controls:
+- enforce service-to-service JWT validation and tenant propagation on write paths.
+4. Complete observability:
+- implement Grafana dashboards + SLO alert rules + Loki/Tempo integration.
+5. Complete blockchain productionization:
+- replace simulated anchoring with real chain adapter and legal-grade audit report format.
+6. Complete runtime/CI container hardening:
+- image scan/signing, compose/k8s health probes, and release promotion pipeline.
+
+## 12) Remaining TODOs (Post-Phase 12)
+
+1. Migrate `identity`, `lab-transfer`, and `sync-gateway` state from Redis snapshots to Supabase-backed durable tables with migration scripts.
+2. Expand idempotent consumer coverage to all required topics (`transfer.events`, `audit.events`, retry/dead-letter events).
+3. Add mTLS/service identity and key rotation for internal JWT secret distribution.
+4. Add Alertmanager routing + escalation policies and tenant-segmented Grafana dashboards.
+5. Integrate production blockchain endpoint and verify inclusion/finality with retry/backoff strategy.
+6. Add signed SBOM generation and enforcement gates in release promotion.

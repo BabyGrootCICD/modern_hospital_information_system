@@ -1,67 +1,290 @@
-name: "CodeQL-update"
+name: ci-and-codeql
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch:
+    inputs:
+      promote_tag:
+        description: "Optional tag to promote (for manual release promotion)"
+        required: false
+        type: string
 
 permissions:
-  contents: write  # Grant write permission for contents
-  security-events: write  # Grant write permission for security events
-  actions: read  # Ensure actions can be accessed
-  checks: write  # Ensure checks can be accessed and updated
+  contents: read
+  security-events: write
+  packages: write
+  id-token: write
 
 jobs:
-  analyze:
+  go-backend:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        language: ['csharp']
+        service:
+          - identity-access-service
+          - patient-chart-service
+          - order-clinical-service
+          - lab-transfer-service
+          - sync-gateway-service
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Setup .NET Core
-      uses: actions/setup-dotnet@v3
-      with:
-        dotnet-version: '7.x'  # Adjust based on your project's .NET version
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
 
-    - name: Initialize the CodeQL engine
-      uses: github/codeql-action/init@v2
-      with:
-        languages: ${{ matrix.language }}
+      - name: Build service
+        run: go build ./...
+        working-directory: services/go/${{ matrix.service }}
 
-    - name: Restore dependencies for SHIS.HisOrder.Console.Gateway project
-      run: dotnet restore
-      working-directory: SHIS.HisOrder.Console.Gateway
+      - name: Vet service
+        run: go vet ./...
+        working-directory: services/go/${{ matrix.service }}
 
-    - name: Restore dependencies for SHIS.HisOrder.MVC project
-      run: dotnet restore
-      working-directory: SHIS.HisOrder.MVC
+  rust-backend:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - audit-integrity-service
+          - document-proof-service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Restore dependencies for SHIS.MOHD.WebAPI project
-      run: dotnet restore
-      working-directory: SHIS.MOHD.WebAPI
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
 
-    - name: Build SHIS.HisOrder.Console.Gateway project
-      run: dotnet build --no-restore --configuration Release --verbosity detailed
-      working-directory: SHIS.HisOrder.Console.Gateway
+      - name: Cargo check
+        run: cargo check
+        working-directory: services/rust/${{ matrix.service }}
 
-    - name: Build SHIS.HisOrder.MVC project
-      run: dotnet build --no-restore --configuration Release --verbosity detailed
-      working-directory: SHIS.HisOrder.MVC
+  web-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Build SHIS.MOHD.WebAPI project
-      run: dotnet build --no-restore --configuration Release --verbosity detailed
-      working-directory: SHIS.MOHD.WebAPI
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web-next/package-lock.json
 
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v2
-      with:
-        upload: true  # Ensure results are uploaded
+      - name: Install deps
+        run: npm install
+        working-directory: apps/web-next
 
-    - name: Print GitHub context  # Debugging step
-      run: echo "${{ toJson(github) }}"
+      - name: Build
+        run: npm run build
+        working-directory: apps/web-next
+
+  robot-e2e:
+    runs-on: ubuntu-latest
+    needs: [go-backend, rust-backend]
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Robot dependencies
+        run: pip install -r test/requirements.txt
+
+      - name: Build and start backend stack
+        run: docker compose -f infra/docker-compose.services.yml up -d --build
+
+      - name: Wait for services
+        run: sleep 25
+
+      - name: Run Robot full suite
+        run: robot -d test/results test/suites
+
+      - name: Upload Robot results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: robot-results
+          path: test/results
+
+      - name: Dump compose logs on failure
+        if: failure()
+        run: docker compose -f infra/docker-compose.services.yml logs --no-color
+
+      - name: Tear down backend stack
+        if: always()
+        run: docker compose -f infra/docker-compose.services.yml down -v
+
+  docs-check:
+    runs-on: ubuntu-latest
+    needs: [go-backend, rust-backend, web-frontend, robot-e2e]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate docs plan files
+        run: |
+          test -f docs/modernization-migration-plan.md
+          test -f docs/phase1-implementation-status.md
+          test -f docs/phase2-implementation-status.md
+          test -f docs/phase3-implementation-status.md
+          test -f docs/phase4-implementation-status.md
+          test -f docs/phase5-implementation-status.md
+          test -f docs/phase6-implementation-status.md
+          test -f docs/phase7-implementation-status.md
+          test -f docs/phase8-implementation-status.md
+          test -f docs/phase9-implementation-status.md
+          test -f docs/phase10-implementation-status.md
+          test -f docs/phase11-implementation-status.md
+          test -f docs/phase12-implementation-status.md
+          test -f infra/observability/prometheus/prometheus.yml
+          test -f infra/observability/prometheus/alerts.yml
+          test -f infra/observability/otel-collector/config.yaml
+
+  codeql:
+    runs-on: ubuntu-latest
+    needs: [go-backend, rust-backend, web-frontend, robot-e2e]
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [go, javascript]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3
+
+  container-hardening:
+    runs-on: ubuntu-latest
+    needs: [go-backend, rust-backend, web-frontend]
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - shis-identity-access-service
+          - shis-patient-chart-service
+          - shis-order-clinical-service
+          - shis-lab-transfer-service
+          - shis-sync-gateway-service
+          - shis-audit-integrity-service
+          - shis-document-proof-service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set build context
+        id: ctx
+        run: |
+          case "${{ matrix.image }}" in
+            shis-identity-access-service) echo "context=services/go/identity-access-service" >> "$GITHUB_OUTPUT" ;;
+            shis-patient-chart-service) echo "context=services/go/patient-chart-service" >> "$GITHUB_OUTPUT" ;;
+            shis-order-clinical-service) echo "context=services/go/order-clinical-service" >> "$GITHUB_OUTPUT" ;;
+            shis-lab-transfer-service) echo "context=services/go/lab-transfer-service" >> "$GITHUB_OUTPUT" ;;
+            shis-sync-gateway-service) echo "context=services/go/sync-gateway-service" >> "$GITHUB_OUTPUT" ;;
+            shis-audit-integrity-service) echo "context=services/rust/audit-integrity-service" >> "$GITHUB_OUTPUT" ;;
+            shis-document-proof-service) echo "context=services/rust/document-proof-service" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        run: docker build -t ${{ matrix.image }}:${{ github.sha }} "${{ steps.ctx.outputs.context }}"
+
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ matrix.image }}:${{ github.sha }}
+          format: sarif
+          output: trivy-${{ matrix.image }}.sarif
+
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-${{ matrix.image }}.sarif
+
+  publish-and-sign:
+    runs-on: ubuntu-latest
+    needs: [container-hardening]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push service images
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}/identity-access-service:${{ github.sha }} services/go/identity-access-service
+          docker push ghcr.io/${{ github.repository }}/identity-access-service:${{ github.sha }}
+          docker build -t ghcr.io/${{ github.repository }}/patient-chart-service:${{ github.sha }} services/go/patient-chart-service
+          docker push ghcr.io/${{ github.repository }}/patient-chart-service:${{ github.sha }}
+          docker build -t ghcr.io/${{ github.repository }}/order-clinical-service:${{ github.sha }} services/go/order-clinical-service
+          docker push ghcr.io/${{ github.repository }}/order-clinical-service:${{ github.sha }}
+          docker build -t ghcr.io/${{ github.repository }}/lab-transfer-service:${{ github.sha }} services/go/lab-transfer-service
+          docker push ghcr.io/${{ github.repository }}/lab-transfer-service:${{ github.sha }}
+          docker build -t ghcr.io/${{ github.repository }}/sync-gateway-service:${{ github.sha }} services/go/sync-gateway-service
+          docker push ghcr.io/${{ github.repository }}/sync-gateway-service:${{ github.sha }}
+          docker build -t ghcr.io/${{ github.repository }}/audit-integrity-service:${{ github.sha }} services/rust/audit-integrity-service
+          docker push ghcr.io/${{ github.repository }}/audit-integrity-service:${{ github.sha }}
+          docker build -t ghcr.io/${{ github.repository }}/document-proof-service:${{ github.sha }} services/rust/document-proof-service
+          docker push ghcr.io/${{ github.repository }}/document-proof-service:${{ github.sha }}
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign pushed images (keyless)
+        run: |
+          cosign sign --yes ghcr.io/${{ github.repository }}/identity-access-service:${{ github.sha }}
+          cosign sign --yes ghcr.io/${{ github.repository }}/patient-chart-service:${{ github.sha }}
+          cosign sign --yes ghcr.io/${{ github.repository }}/order-clinical-service:${{ github.sha }}
+          cosign sign --yes ghcr.io/${{ github.repository }}/lab-transfer-service:${{ github.sha }}
+          cosign sign --yes ghcr.io/${{ github.repository }}/sync-gateway-service:${{ github.sha }}
+          cosign sign --yes ghcr.io/${{ github.repository }}/audit-integrity-service:${{ github.sha }}
+          cosign sign --yes ghcr.io/${{ github.repository }}/document-proof-service:${{ github.sha }}
+
+  promote-release:
+    runs-on: ubuntu-latest
+    needs: [publish-and-sign]
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.promote_tag != ''
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Promote images to stable tag
+        run: |
+          for image in identity-access-service patient-chart-service order-clinical-service lab-transfer-service sync-gateway-service audit-integrity-service document-proof-service; do
+            docker pull ghcr.io/${{ github.repository }}/$image:${{ github.event.inputs.promote_tag }}
+            docker tag ghcr.io/${{ github.repository }}/$image:${{ github.event.inputs.promote_tag }} ghcr.io/${{ github.repository }}/$image:stable
+            docker push ghcr.io/${{ github.repository }}/$image:stable
+          done

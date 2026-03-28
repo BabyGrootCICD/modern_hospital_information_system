@@ -1,0 +1,56 @@
+name: frontend-infra-ci
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web-next
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web-next/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+  infra-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate service compose
+        run: docker compose -f infra/docker-compose.services.yml config >/dev/null
+
+      - name: Validate modern compose
+        run: docker compose -f infra/docker-compose.modern.yml config >/dev/null
+
+      - name: Validate required infra files
+        run: |
+          test -f infra/observability/prometheus/prometheus.yml
+          test -f infra/observability/prometheus/alerts.yml
+          test -f infra/observability/otel-collector/config.yaml
+          test -f infra/observability/loki/config.yaml
+          test -f infra/observability/tempo/tempo.yaml
+          test -f infra/grafana/provisioning/datasources/datasource.yaml
+          test -f infra/grafana/provisioning/dashboards/dashboards.yaml

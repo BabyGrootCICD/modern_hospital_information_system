@@ -8,13 +8,175 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
+      - web-next
+      - identity-access-service
+      - patient-chart-service
+      - order-clinical-service
+      - lab-transfer-service
+      - sync-gateway-service
+      - audit-integrity-service
+      - document-proof-service
       - grafana
+      - prometheus
       - redis
+
+  web-next:
+    image: node:22-alpine
+    working_dir: /workspace
+    command: sh -c "npm install && npm run dev -- --hostname 0.0.0.0 --port 3001"
+    volumes:
+      - ../apps/web-next:/workspace
+    ports:
+      - "3001:3001"
+
+  identity-access-service:
+    image: golang:1.23-alpine
+    working_dir: /workspace
+    command: sh -c "go run ./cmd/api"
+    environment:
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: identity-access-service
+    volumes:
+      - ../services/go/identity-access-service:/workspace
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/healthz >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  lab-transfer-service:
+    image: golang:1.23-alpine
+    working_dir: /workspace
+    command: sh -c "go run ./cmd/api"
+    environment:
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: lab-transfer-service
+    volumes:
+      - ../services/go/lab-transfer-service:/workspace
+    ports:
+      - "8084:8084"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8084/healthz >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  patient-chart-service:
+    image: golang:1.23-alpine
+    working_dir: /workspace
+    command: sh -c "go run ./cmd/api"
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: patient-chart-service
+    volumes:
+      - ../services/go/patient-chart-service:/workspace
+    ports:
+      - "8082:8082"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/healthz >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  sync-gateway-service:
+    image: golang:1.23-alpine
+    working_dir: /workspace
+    command: sh -c "go run ./cmd/api"
+    environment:
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: sync-gateway-service
+    volumes:
+      - ../services/go/sync-gateway-service:/workspace
+    ports:
+      - "8085:8085"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8085/healthz >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  order-clinical-service:
+    image: golang:1.23-alpine
+    working_dir: /workspace
+    command: sh -c "go run ./cmd/api"
+    environment:
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: order-clinical-service
+    volumes:
+      - ../services/go/order-clinical-service:/workspace
+    ports:
+      - "8083:8083"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8083/healthz >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  audit-integrity-service:
+    image: rust:1.81
+    working_dir: /workspace
+    command: sh -c "cargo run"
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
+      RETRY_MAX_ATTEMPTS: ${RETRY_MAX_ATTEMPTS:-3}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      LEGAL_REPORT_SIGNING_SECRET: ${LEGAL_REPORT_SIGNING_SECRET:-dev-legal-secret}
+    volumes:
+      - ../services/rust/audit-integrity-service:/workspace
+    ports:
+      - "8091:8091"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8091/healthz >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  document-proof-service:
+    image: rust:1.81
+    working_dir: /workspace
+    command: sh -c "cargo run"
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
+      RETRY_MAX_ATTEMPTS: ${RETRY_MAX_ATTEMPTS:-3}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      CHAIN_ADAPTER_URL: ${CHAIN_ADAPTER_URL:-}
+      CHAIN_ADAPTER_TOKEN: ${CHAIN_ADAPTER_TOKEN:-}
+    volumes:
+      - ../services/rust/document-proof-service:/workspace
+    ports:
+      - "8092:8092"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8092/healthz >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7.4-alpine
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.7.0
@@ -36,6 +198,27 @@ services:
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 20s
+      timeout: 10s
+      retries: 6
+
+  loki:
+    image: grafana/loki:3.2.1
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ./observability/loki/config.yaml:/etc/loki/config.yaml:ro
+    ports:
+      - "3100:3100"
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./observability/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+    ports:
+      - "3200:3200"
 
   grafana:
     image: grafana/grafana:11.5.2
@@ -43,3 +226,23 @@ services:
       - "3000:3000"
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./observability/otel-collector/config.yaml:/etc/otel/config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    depends_on:
+      - tempo
