@@ -1,5 +1,7 @@
 # Phase 1 Implementation Status
 
+Status: Completed, with follow-up items moved into Phase 2/3.
+
 ## Completed in this batch
 
 - Next.js locale route shell (`/en`, `/zh`) with middleware redirect behavior.
@@ -18,8 +20,8 @@
 ## Deferred to next batch
 
 - Supabase Auth integration replacing temporary cookie session.
-- Real RBAC policy backend wiring (identity-access-service).
-- Report summary aggregation from migrated Go services.
+- End-to-end RBAC enforcement via identity service token validation.
+- Report summary aggregation from migrated Go services and event stream.
 
 ## Follow-up completed in Phase 2 kickoff
 

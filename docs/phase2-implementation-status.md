@@ -1,5 +1,7 @@
 # Phase 2 Implementation Status
 
+Status: Core extraction APIs implemented; persistence/event layers pending.
+
 ## Goal
 
 Extract backend capabilities from legacy monolith boundaries into independently deployable microservices.
@@ -20,6 +22,7 @@ Extract backend capabilities from legacy monolith boundaries into independently 
   - `/api/sync/*`
 - Local compose services for all three Go APIs.
 - Next.js BFF endpoint for sync job creation: `/api/bff/sync/jobs`.
+- Supabase-oriented chart retrieval path via `patient-chart-service` and `/api/bff/charts/:patientID`.
 
 ## Current limits
 
@@ -30,3 +33,5 @@ Extract backend capabilities from legacy monolith boundaries into independently 
 ## Next incremental step
 
 - Add Redis-backed job/session storage and Kafka publish hooks for transfer/sync state transitions.
+- Enforce service JWT validation for all write endpoints.
+- Add idempotency keys and request replay safety for transfer/sync create endpoints.

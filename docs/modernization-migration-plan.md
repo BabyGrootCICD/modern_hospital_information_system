@@ -1,5 +1,20 @@
 # SHIS Modernization Migration Plan
 
+## 0) Live Progress Snapshot (2026-03-28)
+
+- Completed:
+  - Phase 0 foundation scaffolding (Next.js, Go, Rust, infra baseline).
+  - Phase 1 frontend shell (locale routing, session auth scaffold, protected pages, BFF endpoints, Nginx strangler routes).
+  - Phase 2 backend kickoff (identity, lab-transfer, sync-gateway APIs and ingress routes).
+  - Phase 3 kickoff (Supabase-oriented patient-chart service integration and SQL migration baseline).
+- In progress:
+  - Service persistence hardening (move in-memory stores to Supabase/Redis).
+  - Contract stabilization across BFF and microservices.
+- Not started:
+  - Kafka outbox/event stream wiring.
+  - full observability SLO dashboards.
+  - blockchain anchoring pilot implementation.
+
 ## 1) Current-State Scan Summary
 
 ### Existing solution layout
@@ -160,8 +175,7 @@
 
 ## 10) Immediate Next Actions
 
-1. Approve service boundaries and migration order in this document.
-2. Decide blockchain mode:
-- consortium only, public L2 anchoring, or dual anchor (highest assurance).
-3. Create implementation epics from phases (frontend, services, data, infra, integrity).
-4. Start Phase 0 with baseline repository and CI/CD scaffolding.
+1. Replace in-memory stores in `identity`, `lab-transfer`, and `sync-gateway` with Supabase + Redis.
+2. Introduce Kafka topic contracts and outbox tables for transfer/sync/audit events.
+3. Add service-to-service auth and tenant propagation headers.
+4. Implement Grafana dashboards and SLO alerts before broader production traffic cutover.
