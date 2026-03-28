@@ -28,4 +28,4 @@ docker compose -f infra/docker-compose.modern.yml up -d
 
 - .NET backend projects were intentionally removed.
 - Legacy SQL snapshots remain in repository root as migration references.
-- Detailed phase progress is maintained in `docs/phase*-implementation-status.md` (Phase 1-6).
+- Detailed phase progress is maintained in `docs/phase*-implementation-status.md` (Phase 1-8).

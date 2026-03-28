@@ -33,6 +33,7 @@ Extract backend capabilities from legacy monolith boundaries into independently 
 - Metrics endpoints now exist, but SLO alerting and trace correlation are pending.
 - Integrity verification APIs are now available, but service-to-service auth on those paths is still pending.
 - Integrity/proof persistence now supports Supabase hooks, but cross-service transaction consistency is pending.
+- Integrity/proof retry behavior now exists, but durable queue storage is pending.
 
 ## Next incremental step
 

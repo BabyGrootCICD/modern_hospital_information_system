@@ -24,3 +24,9 @@ Status: Durability hardening in progress for integrity/proof services.
 - Add retry queue + dead-letter path for failed persistence.
 - Emit persistence success/failure events to Kafka.
 - Add scheduled reconciliation job and dashboard panels.
+
+## Progress update
+
+- Retry queue and background retry worker implemented.
+- Manual retry trigger and queue status endpoints implemented.
+- Dead-letter handling and Kafka persistence events remain pending.

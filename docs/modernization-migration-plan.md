@@ -12,6 +12,7 @@
   - Phase 5 kickoff (Prometheus metrics endpoints across Go services + Prometheus/OTEL stack wiring).
   - Integrity pilot kickoff (Rust digest chain + Merkle root + proof anchor APIs).
   - Phase 7 kickoff (Supabase persistence hooks and reconciliation endpoints for Rust integrity/proof services).
+  - Phase 8 kickoff (retry queues + background reconciliation workers for failed integrity/proof persistence).
 - In progress:
   - Service persistence hardening (move in-memory stores to Supabase/Redis).
   - Contract stabilization across BFF and microservices.
@@ -171,6 +172,7 @@
   - replace simulated anchor with real blockchain transaction submission.
   - persist integrity/proof records to Supabase.
   - define legal/audit report format and retention policies.
+  - add durable retry queue backend (current retry queue is in-memory).
 
 ### Integrity verification features to implement
 - `VerifyRecord(record_id)` API returns current digest, historical digest chain, anchored Merkle proof, and chain transaction reference.

@@ -30,6 +30,7 @@ Status: Integrity/blockchain pilot APIs implemented with simulated anchoring.
 
 - Added Supabase persistence hooks in both Rust services (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`).
 - Added reconcile endpoints to check whether integrity/proof records are persisted.
+- Added retry queue status and retry run endpoints plus background retry workers.
 
 ## Next step
 
