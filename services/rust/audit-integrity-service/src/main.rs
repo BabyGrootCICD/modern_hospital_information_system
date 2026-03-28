@@ -4,7 +4,9 @@ use axum::{
     Json, Router,
 };
 use hex::encode as hex_encode;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -13,9 +15,17 @@ use tokio::sync::RwLock;
 #[derive(Clone)]
 struct AppState {
     events: Arc<RwLock<Vec<IntegrityEvent>>>,
+    supabase: Option<SupabaseConfig>,
+    client: Client,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Clone)]
+struct SupabaseConfig {
+    url: String,
+    service_key: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 struct IntegrityEvent {
     event_id: String,
     aggregate_id: String,
@@ -33,6 +43,12 @@ struct CreateEventRequest {
 }
 
 #[derive(Serialize)]
+struct CreateEventResponse {
+    event: IntegrityEvent,
+    persisted: bool,
+}
+
+#[derive(Serialize)]
 struct VerifyResponse {
     aggregate_id: String,
     chain_valid: bool,
@@ -44,6 +60,13 @@ struct VerifyResponse {
 struct MerkleResponse {
     root_hash: String,
     leaf_count: usize,
+}
+
+#[derive(Serialize)]
+struct ReconcileResponse {
+    key: String,
+    supabase_configured: bool,
+    persisted: bool,
 }
 
 #[derive(Serialize)]
@@ -81,6 +104,59 @@ fn merkle_root(mut leaves: Vec<String>) -> String {
     leaves.remove(0)
 }
 
+async fn supabase_insert_event(state: &AppState, event: &IntegrityEvent) -> bool {
+    let Some(cfg) = &state.supabase else {
+        return false;
+    };
+
+    let endpoint = format!("{}/rest/v1/integrity_events", cfg.url);
+    let payload = json!([{
+        "event_id": event.event_id,
+        "aggregate_id": event.aggregate_id,
+        "aggregate_type": event.aggregate_type,
+        "digest_sha256": event.payload_hash,
+        "merkle_root": serde_json::Value::Null,
+        "chain_tx_hash": serde_json::Value::Null
+    }]);
+
+    state
+        .client
+        .post(endpoint)
+        .header("apikey", &cfg.service_key)
+        .header("Authorization", format!("Bearer {}", cfg.service_key))
+        .header("Content-Type", "application/json")
+        .header("Prefer", "return=minimal")
+        .body(payload.to_string())
+        .send()
+        .await
+        .map(|r| r.status().is_success())
+        .unwrap_or(false)
+}
+
+async fn supabase_has_event(state: &AppState, event_id: &str) -> bool {
+    let Some(cfg) = &state.supabase else {
+        return false;
+    };
+    let endpoint = format!(
+        "{}/rest/v1/integrity_events?event_id=eq.{}&select=event_id",
+        cfg.url, event_id
+    );
+    match state
+        .client
+        .get(endpoint)
+        .header("apikey", &cfg.service_key)
+        .header("Authorization", format!("Bearer {}", cfg.service_key))
+        .send()
+        .await
+    {
+        Ok(resp) if resp.status().is_success() => match resp.text().await {
+            Ok(body) => body.contains("event_id"),
+            Err(_) => false,
+        },
+        _ => false,
+    }
+}
+
 async fn healthz() -> Json<Health<'static>> {
     Json(Health {
         service: "audit-integrity-service",
@@ -91,7 +167,7 @@ async fn healthz() -> Json<Health<'static>> {
 async fn create_event(
     State(state): State<AppState>,
     Json(req): Json<CreateEventRequest>,
-) -> Json<IntegrityEvent> {
+) -> Json<CreateEventResponse> {
     let payload_hash = sha256_hex(&req.payload);
     let ts = now_epoch();
 
@@ -113,7 +189,10 @@ async fn create_event(
         created_at: ts,
     };
     events.push(event.clone());
-    Json(event)
+    drop(events);
+
+    let persisted = supabase_insert_event(&state, &event).await;
+    Json(CreateEventResponse { event, persisted })
 }
 
 async fn list_events(
@@ -168,10 +247,31 @@ async fn merkle(State(state): State<AppState>) -> Json<MerkleResponse> {
     })
 }
 
+async fn reconcile(Path(event_id): Path<String>, State(state): State<AppState>) -> Json<ReconcileResponse> {
+    let persisted = supabase_has_event(&state, &event_id).await;
+    Json(ReconcileResponse {
+        key: event_id,
+        supabase_configured: state.supabase.is_some(),
+        persisted,
+    })
+}
+
 #[tokio::main]
 async fn main() {
+    let supabase = match (
+        std::env::var("SUPABASE_URL").ok(),
+        std::env::var("SUPABASE_SERVICE_KEY").ok(),
+    ) {
+        (Some(url), Some(service_key)) if !url.is_empty() && !service_key.is_empty() => {
+            Some(SupabaseConfig { url, service_key })
+        }
+        _ => None,
+    };
+
     let state = AppState {
         events: Arc::new(RwLock::new(Vec::new())),
+        supabase,
+        client: Client::new(),
     };
 
     let app = Router::new()
@@ -180,6 +280,7 @@ async fn main() {
         .route("/v1/integrity/events/:aggregate_id", get(list_events))
         .route("/v1/integrity/verify/:aggregate_id", get(verify_events))
         .route("/v1/integrity/merkle-root", get(merkle))
+        .route("/v1/integrity/reconcile/:event_id", get(reconcile))
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8091")

@@ -98,6 +98,9 @@ services:
     image: rust:1.81
     working_dir: /workspace
     command: sh -c "cargo run"
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
     volumes:
       - ../services/rust/audit-integrity-service:/workspace
     ports:
@@ -107,6 +110,9 @@ services:
     image: rust:1.81
     working_dir: /workspace
     command: sh -c "cargo run"
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
     volumes:
       - ../services/rust/document-proof-service:/workspace
     ports:
