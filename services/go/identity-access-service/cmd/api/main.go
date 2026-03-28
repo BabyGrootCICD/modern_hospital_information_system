@@ -50,7 +50,9 @@ type OutboxEvent struct {
 type AppEnv struct {
 	redis            *redis.Client
 	outboxMaxAttempt int
-	jwtSecret        string
+	jwtSecrets       []string
+	supabaseURL      string
+	supabaseKey      string
 }
 
 const (
@@ -94,6 +96,101 @@ func bearerToken(header string) string {
 		return ""
 	}
 	return strings.TrimSpace(parts[1])
+}
+
+func jwtSecretsFromEnv() []string {
+	seen := map[string]struct{}{}
+	var out []string
+	add := func(v string) {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			return
+		}
+		if _, ok := seen[v]; ok {
+			return
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	add(os.Getenv("INTERNAL_JWT_SECRET"))
+	add(os.Getenv("INTERNAL_JWT_SECRET_PREVIOUS"))
+	for _, item := range strings.Split(os.Getenv("INTERNAL_JWT_SECRETS"), ",") {
+		add(item)
+	}
+	return out
+}
+
+func parseJWTWithAnySecret(token string, secrets []string) (jwt.MapClaims, bool) {
+	for _, secret := range secrets {
+		parsed, err := jwt.Parse(token, func(t *jwt.Token) (any, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method")
+			}
+			return []byte(secret), nil
+		})
+		if err != nil || !parsed.Valid {
+			continue
+		}
+		claims, ok := parsed.Claims.(jwt.MapClaims)
+		if ok {
+			return claims, true
+		}
+	}
+	return nil, false
+}
+
+func persistSessionToSupabase(ctx context.Context, env *AppEnv, s Session) {
+	if env.supabaseURL == "" || env.supabaseKey == "" {
+		return
+	}
+	endpoint := fmt.Sprintf("%s/rest/v1/identity_sessions", strings.TrimRight(env.supabaseURL, "/"))
+	payload := []map[string]any{{
+		"token":      s.Token,
+		"username":   s.Username,
+		"role":       s.Role,
+		"tenant_id":  s.Tenant,
+		"expires_at": s.ExpiresAt.UTC().Format(time.RFC3339),
+	}}
+	body, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(body)))
+	if err != nil {
+		return
+	}
+	req.Header.Set("apikey", env.supabaseKey)
+	req.Header.Set("Authorization", "Bearer "+env.supabaseKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "resolution=merge-duplicates,return=minimal")
+	_, _ = http.DefaultClient.Do(req)
+}
+
+func persistOutboxEventToSupabase(ctx context.Context, env *AppEnv, evt OutboxEvent) {
+	if env.supabaseURL == "" || env.supabaseKey == "" {
+		return
+	}
+	endpoint := fmt.Sprintf("%s/rest/v1/service_outbox_events", strings.TrimRight(env.supabaseURL, "/"))
+	payload := []map[string]any{{
+		"event_id":    evt.ID,
+		"service":     "identity-access-service",
+		"topic":       evt.Topic,
+		"event_key":   evt.Key,
+		"payload":     string(evt.Payload),
+		"tenant_id":   evt.TenantID,
+		"attempts":    evt.Attempts,
+		"created_at":  evt.CreatedAt.UTC().Format(time.RFC3339),
+		"status":      "pending",
+		"last_error":  evt.LastError,
+		"correlation": evt.Correlation,
+	}}
+	body, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(body)))
+	if err != nil {
+		return
+	}
+	req.Header.Set("apikey", env.supabaseKey)
+	req.Header.Set("Authorization", "Bearer "+env.supabaseKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "resolution=merge-duplicates,return=minimal")
+	_, _ = http.DefaultClient.Do(req)
 }
 
 func loadSessions(ctx context.Context, env *AppEnv) {
@@ -158,6 +255,7 @@ func enqueueOutbox(ctx context.Context, env *AppEnv, topic, key, tenantID string
 		publishOutboxEvent(ctx, env, evt)
 		return
 	}
+	persistOutboxEventToSupabase(ctx, env, evt)
 	if err := env.redis.RPush(ctx, outboxPendingRedisKey, raw).Err(); err != nil {
 		log.Printf("failed to enqueue outbox event: %v", err)
 	}
@@ -249,7 +347,7 @@ func authzMiddleware(env *AppEnv) gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		if env.jwtSecret == "" {
+		if len(env.jwtSecrets) == 0 {
 			c.Next()
 			return
 		}
@@ -258,19 +356,9 @@ func authzMiddleware(env *AppEnv) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing bearer token"})
 			return
 		}
-		parsed, err := jwt.Parse(token, func(t *jwt.Token) (any, error) {
-			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("unexpected signing method")
-			}
-			return []byte(env.jwtSecret), nil
-		})
-		if err != nil || !parsed.Valid {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
-			return
-		}
-		claims, ok := parsed.Claims.(jwt.MapClaims)
+		claims, ok := parseJWTWithAnySecret(token, env.jwtSecrets)
 		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid claims"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			return
 		}
 		tenantClaim, _ := claims["tenant"].(string)
@@ -303,7 +391,9 @@ func main() {
 	env := &AppEnv{
 		redis:            redisClient,
 		outboxMaxAttempt: 5,
-		jwtSecret:        strings.TrimSpace(os.Getenv("INTERNAL_JWT_SECRET")),
+		jwtSecrets:       jwtSecretsFromEnv(),
+		supabaseURL:      strings.TrimSpace(os.Getenv("SUPABASE_URL")),
+		supabaseKey:      strings.TrimSpace(os.Getenv("SUPABASE_SERVICE_KEY")),
 	}
 
 	loadSessions(ctx, env)
@@ -354,6 +444,7 @@ func main() {
 		sessions[token] = session
 		sessionsMu.Unlock()
 		persistSessions(ctx, env)
+		persistSessionToSupabase(ctx, env, session)
 
 		enqueueOutbox(ctx, env, "identity.events", session.Token, session.Tenant, gin.H{
 			"id":         token,

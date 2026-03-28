@@ -1,0 +1,132 @@
+name: backend-ci
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-go-backends:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - identity-access-service
+          - patient-chart-service
+          - order-clinical-service
+          - lab-transfer-service
+          - sync-gateway-service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Build
+        working-directory: services/go/${{ matrix.service }}
+        run: go build ./...
+
+      - name: Test
+        working-directory: services/go/${{ matrix.service }}
+        run: go test ./... -v
+
+  build-rust-backends:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - audit-integrity-service
+          - document-proof-service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        working-directory: services/rust/${{ matrix.service }}
+        run: cargo build
+
+      - name: Test
+        working-directory: services/rust/${{ matrix.service }}
+        run: cargo test
+
+  integration-test-suites:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    needs: [build-go-backends, build-rust-backends]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Prepare report folder
+        run: mkdir -p test/report
+
+      - name: Install Robot dependencies
+        run: pip install -r test/requirements.txt
+
+      - name: Start backend stack
+        run: docker compose -f infra/docker-compose.services.yml up -d --build
+
+      - name: Wait for services
+        run: sleep 30
+
+      - name: Run Robot full suite
+        run: robot -d test/report test/suites
+
+      - name: Save backend smoke checks
+        run: |
+          {
+            echo "identity:"
+            curl -fsS http://localhost:8081/healthz
+            echo
+            echo "patient-chart:"
+            curl -fsS http://localhost:8082/healthz
+            echo
+            echo "order-clinical:"
+            curl -fsS http://localhost:8083/healthz
+            echo
+            echo "lab-transfer:"
+            curl -fsS http://localhost:8084/healthz
+            echo
+            echo "sync-gateway:"
+            curl -fsS http://localhost:8085/healthz
+            echo
+            echo "audit-integrity:"
+            curl -fsS http://localhost:8091/healthz
+            echo
+            echo "document-proof:"
+            curl -fsS http://localhost:8092/healthz
+            echo
+          } > test/report/backend-health.txt
+
+      - name: Upload test report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-report
+          path: test/report
+
+      - name: Dump compose logs on failure
+        if: failure()
+        run: docker compose -f infra/docker-compose.services.yml logs --no-color > test/report/compose.log
+
+      - name: Stop backend stack
+        if: always()
+        run: docker compose -f infra/docker-compose.services.yml down -v

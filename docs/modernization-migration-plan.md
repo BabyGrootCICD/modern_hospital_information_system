@@ -22,6 +22,7 @@
   - Contract stabilization across BFF and microservices.
   - Kafka consumer expansion beyond `sync.commands` baseline.
   - Security hardening for internal service auth key management and rotation.
+  - CI workflow split and stabilization for backend vs frontend/infra delivery lanes.
   - End-to-end container deployment hardening (healthchecks, rollout policy, image publishing workflow).
 - Not started:
   - full production chain adapter integration and chain transaction finality verification.

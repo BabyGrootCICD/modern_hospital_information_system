@@ -23,6 +23,9 @@ struct AppState {
     redis_url: Option<String>,
     chain_adapter_url: Option<String>,
     chain_adapter_token: Option<String>,
+    chain_status_url: Option<String>,
+    chain_finality_retries: u8,
+    chain_finality_delay_ms: u64,
     supabase: Option<SupabaseConfig>,
     client: Client,
 }
@@ -54,12 +57,19 @@ struct AnchorResponse {
     anchor: AnchorRecord,
     persisted: bool,
     adapter_mode: String,
+    finality_confirmed: bool,
+    finality_checks: u8,
 }
 
 #[derive(Deserialize)]
 struct ChainAnchorAdapterResponse {
     tx_hash: String,
     block_height: u64,
+}
+
+#[derive(Deserialize)]
+struct ChainStatusResponse {
+    confirmed: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -265,11 +275,38 @@ async fn submit_chain_anchor(state: &AppState, merkle_root: &str, network: &str)
     (tx_hash, block_height, "simulated".to_string())
 }
 
+async fn verify_chain_finality(state: &AppState, tx_hash: &str) -> (bool, u8) {
+    let Some(url) = &state.chain_status_url else {
+        return (true, 0);
+    };
+    let retries = state.chain_finality_retries.max(1);
+    let delay = std::time::Duration::from_millis(state.chain_finality_delay_ms.max(100));
+    for attempt in 1..=retries {
+        let endpoint = format!("{}/{}", url.trim_end_matches('/'), tx_hash);
+        let mut req = state.client.get(endpoint);
+        if let Some(token) = &state.chain_adapter_token {
+            req = req.bearer_auth(token);
+        }
+        if let Ok(resp) = req.send().await {
+            if resp.status().is_success() {
+                if let Ok(status) = resp.json::<ChainStatusResponse>().await {
+                    if status.confirmed {
+                        return (true, attempt);
+                    }
+                }
+            }
+        }
+        tokio::time::sleep(delay).await;
+    }
+    (false, retries)
+}
+
 async fn anchor(State(state): State<AppState>, Json(req): Json<AnchorRequest>) -> Json<AnchorResponse> {
     let ts = now_epoch();
     let anchor_id = sha256_hex(&format!("{}:{}:{ts}", req.network, req.merkle_root));
     let (tx_hash, block_height, adapter_mode) =
         submit_chain_anchor(&state, &req.merkle_root, &req.network).await;
+    let (finality_confirmed, finality_checks) = verify_chain_finality(&state, &tx_hash).await;
 
     let record = AnchorRecord {
         anchor_id: anchor_id.clone(),
@@ -298,6 +335,8 @@ async fn anchor(State(state): State<AppState>, Json(req): Json<AnchorRequest>) -
         anchor: record,
         persisted,
         adapter_mode,
+        finality_confirmed,
+        finality_checks,
     })
 }
 
@@ -438,6 +477,17 @@ async fn main() {
         chain_adapter_token: std::env::var("CHAIN_ADAPTER_TOKEN")
             .ok()
             .filter(|v| !v.trim().is_empty()),
+        chain_status_url: std::env::var("CHAIN_STATUS_URL")
+            .ok()
+            .filter(|v| !v.trim().is_empty()),
+        chain_finality_retries: std::env::var("CHAIN_FINALITY_RETRIES")
+            .ok()
+            .and_then(|v| v.parse::<u8>().ok())
+            .unwrap_or(3),
+        chain_finality_delay_ms: std::env::var("CHAIN_FINALITY_DELAY_MS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(750),
         supabase,
         client: Client::new(),
     };

@@ -25,8 +25,12 @@ Status: Implemented baseline across durability, eventing, auth/tenant propagatio
   - healthchecks added in compose stacks.
   - CI adds container build+scan+sign+publish/promote workflow stages.
   - CI includes Robot full suite execution and artifact upload.
+  - dedicated workflows added:
+    - backend CI (`.github/workflows/backend-ci.yml`) builds all backends and runs all suites.
+    - frontend+infra CI (`.github/workflows/frontend-infra-ci.yml`) validates frontend build and infra compose/config.
 - Robot Framework full suite:
   - full test suite created in `test/suites` with health/auth/outbox/blockchain coverage.
+  - report output path standardized to `test/report`.
 
 ## Remaining
 

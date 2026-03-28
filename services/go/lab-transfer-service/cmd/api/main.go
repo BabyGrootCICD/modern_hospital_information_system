@@ -92,9 +92,50 @@ func bearerToken(header string) string {
 	return strings.TrimSpace(parts[1])
 }
 
-func authz(jwtSecret string) gin.HandlerFunc {
+func jwtSecretsFromEnv() []string {
+	seen := map[string]struct{}{}
+	var out []string
+	add := func(v string) {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			return
+		}
+		if _, ok := seen[v]; ok {
+			return
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	add(os.Getenv("INTERNAL_JWT_SECRET"))
+	add(os.Getenv("INTERNAL_JWT_SECRET_PREVIOUS"))
+	for _, item := range strings.Split(os.Getenv("INTERNAL_JWT_SECRETS"), ",") {
+		add(item)
+	}
+	return out
+}
+
+func parseJWTWithAnySecret(token string, secrets []string) (jwt.MapClaims, bool) {
+	for _, secret := range secrets {
+		parsed, err := jwt.Parse(token, func(t *jwt.Token) (any, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("invalid signing method")
+			}
+			return []byte(secret), nil
+		})
+		if err != nil || !parsed.Valid {
+			continue
+		}
+		claims, ok := parsed.Claims.(jwt.MapClaims)
+		if ok {
+			return claims, true
+		}
+	}
+	return nil, false
+}
+
+func authz(jwtSecrets []string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if c.Request.Method == http.MethodGet || jwtSecret == "" {
+		if c.Request.Method == http.MethodGet || len(jwtSecrets) == 0 {
 			c.Next()
 			return
 		}
@@ -103,17 +144,11 @@ func authz(jwtSecret string) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing bearer token"})
 			return
 		}
-		parsed, err := jwt.Parse(token, func(t *jwt.Token) (any, error) {
-			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("invalid signing method")
-			}
-			return []byte(jwtSecret), nil
-		})
-		if err != nil || !parsed.Valid {
+		claims, ok := parseJWTWithAnySecret(token, jwtSecrets)
+		if !ok {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			return
 		}
-		claims, _ := parsed.Claims.(jwt.MapClaims)
 		tenantClaim, _ := claims["tenant"].(string)
 		tenantHeader := strings.TrimSpace(c.GetHeader("X-Tenant-ID"))
 		tenantID := tenantClaim
@@ -170,6 +205,67 @@ func enqueueOutbox(ctx context.Context, rdb *redis.Client, evt OutboxEvent) {
 	}
 	raw, _ := json.Marshal(evt)
 	_ = rdb.RPush(ctx, outboxPendingRedisKey, raw).Err()
+	persistOutboxEventToSupabase(ctx, evt)
+}
+
+func persistTransfersToSupabase(ctx context.Context, transfer Transfer) {
+	base := strings.TrimSpace(os.Getenv("SUPABASE_URL"))
+	key := strings.TrimSpace(os.Getenv("SUPABASE_SERVICE_KEY"))
+	if base == "" || key == "" {
+		return
+	}
+	endpoint := fmt.Sprintf("%s/rest/v1/lab_transfers", strings.TrimRight(base, "/"))
+	payload := []map[string]any{{
+		"id":          transfer.ID,
+		"patient_id":  transfer.PatientID,
+		"source_site": transfer.SourceSite,
+		"target_site": transfer.TargetSite,
+		"payload_ref": transfer.PayloadRef,
+		"status":      transfer.Status,
+		"tenant_id":   transfer.TenantID,
+		"created_at":  transfer.CreatedAt.UTC().Format(time.RFC3339),
+		"updated_at":  transfer.UpdatedAt.UTC().Format(time.RFC3339),
+	}}
+	body, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(body)))
+	if err != nil {
+		return
+	}
+	req.Header.Set("apikey", key)
+	req.Header.Set("Authorization", "Bearer "+key)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "resolution=merge-duplicates,return=minimal")
+	_, _ = http.DefaultClient.Do(req)
+}
+
+func persistOutboxEventToSupabase(ctx context.Context, evt OutboxEvent) {
+	base := strings.TrimSpace(os.Getenv("SUPABASE_URL"))
+	key := strings.TrimSpace(os.Getenv("SUPABASE_SERVICE_KEY"))
+	if base == "" || key == "" {
+		return
+	}
+	endpoint := fmt.Sprintf("%s/rest/v1/service_outbox_events", strings.TrimRight(base, "/"))
+	payload := []map[string]any{{
+		"event_id":   evt.ID,
+		"service":    "lab-transfer-service",
+		"topic":      evt.Topic,
+		"event_key":  evt.Key,
+		"payload":    string(evt.Payload),
+		"tenant_id":  evt.TenantID,
+		"attempts":   evt.Attempts,
+		"created_at": evt.CreatedAt.UTC().Format(time.RFC3339),
+		"status":     "pending",
+	}}
+	body, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(body)))
+	if err != nil {
+		return
+	}
+	req.Header.Set("apikey", key)
+	req.Header.Set("Authorization", "Bearer "+key)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "resolution=merge-duplicates,return=minimal")
+	_, _ = http.DefaultClient.Do(req)
 }
 
 func publishToKafka(ctx context.Context, evt OutboxEvent) error {
@@ -257,7 +353,7 @@ func main() {
 		httpRequestsTotal.WithLabelValues(serviceName, c.Request.Method, route, status).Inc()
 		httpRequestDuration.WithLabelValues(serviceName, c.Request.Method, route).Observe(time.Since(start).Seconds())
 	})
-	r.Use(authz(strings.TrimSpace(os.Getenv("INTERNAL_JWT_SECRET"))))
+	r.Use(authz(jwtSecretsFromEnv()))
 
 	r.POST("/v1/transfers", func(c *gin.Context) {
 		var req CreateTransferRequest
@@ -291,6 +387,7 @@ func main() {
 		transfers[id] = transfer
 		transfersMu.Unlock()
 		persistTransfers(ctx, rdb)
+		persistTransfersToSupabase(ctx, transfer)
 
 		payload, _ := json.Marshal(gin.H{
 			"id":          id,
@@ -340,6 +437,7 @@ func main() {
 		transfers[id] = transfer
 		transfersMu.Unlock()
 		persistTransfers(ctx, rdb)
+		persistTransfersToSupabase(ctx, transfer)
 
 		payload, _ := json.Marshal(gin.H{
 			"id":          fmt.Sprintf("%s-complete", transfer.ID),
