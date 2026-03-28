@@ -5,6 +5,7 @@ Status: Completed, with follow-up items moved into Phase 2/3.
 Backend policy update: repository now excludes .NET backend projects; Go/Rust is the only backend path.
 
 Observability note: frontend routes are now served behind infra that includes Prometheus/OTEL plumbing for backend services.
+Integrity note: frontend BFF now also proxies integrity/proof APIs from Rust services.
 
 ## Completed in this batch
 

@@ -21,3 +21,4 @@ Status: Kickoff implemented; durable event pipeline hardening pending.
 - Idempotent event consumers with replay and dead-letter handling.
 - Schema/version contracts for event payloads.
 - Audit event stream integration with Rust integrity services.
+- Event-driven trigger from transfer/sync completion to integrity event creation.

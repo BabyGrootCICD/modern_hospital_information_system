@@ -31,6 +31,7 @@ Extract backend capabilities from legacy monolith boundaries into independently 
 - No service-to-service auth tokens yet.
 - Kafka publish hooks now exist, but outbox + durable consumer flows are still pending.
 - Metrics endpoints now exist, but SLO alerting and trace correlation are pending.
+- Integrity verification APIs are now available, but service-to-service auth on those paths is still pending.
 
 ## Next incremental step
 

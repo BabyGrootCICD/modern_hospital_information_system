@@ -26,3 +26,4 @@ Status: Kickoff implemented; SLO and tracing hardening pending.
 - Service-level dashboards for golden signals (latency, errors, saturation, traffic).
 - Alert rules for SLO burn rates.
 - Log aggregation backend (Loki) and trace backend (Tempo) integration.
+- Integrity/proof API latency and failure-rate panels.

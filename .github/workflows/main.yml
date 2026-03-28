@@ -95,6 +95,7 @@ jobs:
           test -f docs/phase3-implementation-status.md
           test -f docs/phase4-implementation-status.md
           test -f docs/phase5-implementation-status.md
+          test -f docs/phase6-implementation-status.md
           test -f infra/observability/prometheus/prometheus.yml
           test -f infra/observability/otel-collector/config.yaml
 

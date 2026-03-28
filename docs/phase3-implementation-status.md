@@ -24,3 +24,4 @@ Status: Kickoff implemented (schema baseline + service integration); migration e
 - Full schema mapping report for all legacy tables.
 - Redis caching integration for high-volume read paths.
 - Supabase operational dashboards in Grafana tied to migration cutover KPIs.
+- Integrity and proof tables for Rust services (chain hash / anchor tx metadata) migration scripts.

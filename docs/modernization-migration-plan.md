@@ -10,13 +10,14 @@
   - Legacy .NET backend projects removed from repository and delivery path.
   - Phase 4 kickoff (Kafka event emission hooks in Go services).
   - Phase 5 kickoff (Prometheus metrics endpoints across Go services + Prometheus/OTEL stack wiring).
+  - Integrity pilot kickoff (Rust digest chain + Merkle root + proof anchor APIs).
 - In progress:
   - Service persistence hardening (move in-memory stores to Supabase/Redis).
   - Contract stabilization across BFF and microservices.
 - Not started:
   - Kafka outbox/event stream consumers and replay handling.
   - full observability SLO dashboards and alert policies.
-  - blockchain anchoring pilot implementation.
+  - blockchain network adapter for real chain transactions (current anchor is simulated).
 
 ## 1) Current-State Scan Summary
 
@@ -158,6 +159,16 @@
 - better governance/privacy, more operational overhead.
 2. Public L2 anchoring (e.g., Polygon):
 - low cost, strong external timestamping, simpler verification tooling.
+
+### Pilot implementation status
+- Implemented:
+  - `audit-integrity-service` now supports event hashing, chain verification, and Merkle-root generation APIs.
+  - `document-proof-service` now supports proof anchoring and anchor verification APIs (simulated chain metadata).
+  - Next.js BFF proxy routes and Nginx ingress routes are in place for these Rust services.
+- Pending:
+  - replace simulated anchor with real blockchain transaction submission.
+  - persist integrity/proof records to Supabase.
+  - define legal/audit report format and retention policies.
 
 ### Integrity verification features to implement
 - `VerifyRecord(record_id)` API returns current digest, historical digest chain, anchored Merkle proof, and chain transaction reference.
