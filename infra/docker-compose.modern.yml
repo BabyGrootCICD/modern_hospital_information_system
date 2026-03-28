@@ -10,6 +10,7 @@ services:
     depends_on:
       - web-next
       - identity-access-service
+      - patient-chart-service
       - lab-transfer-service
       - sync-gateway-service
       - grafana
@@ -41,6 +42,18 @@ services:
       - ../services/go/lab-transfer-service:/workspace
     ports:
       - "8084:8084"
+
+  patient-chart-service:
+    image: golang:1.23-alpine
+    working_dir: /workspace
+    command: sh -c "go run ./cmd/api"
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+    volumes:
+      - ../services/go/patient-chart-service:/workspace
+    ports:
+      - "8082:8082"
 
   sync-gateway-service:
     image: golang:1.23-alpine
