@@ -23,12 +23,13 @@ Extract backend capabilities from legacy monolith boundaries into independently 
 - Local compose services for all three Go APIs.
 - Next.js BFF endpoint for sync job creation: `/api/bff/sync/jobs`.
 - Supabase-oriented chart retrieval path via `patient-chart-service` and `/api/bff/charts/:patientID`.
+- Legacy .NET backend code removed from repository.
 
 ## Current limits
 
 - In-memory storage only (no Redis/Kafka/Supabase persistence yet).
 - No service-to-service auth tokens yet.
-- No outbox/event publishing yet.
+- Kafka publish hooks now exist, but outbox + durable consumer flows are still pending.
 
 ## Next incremental step
 

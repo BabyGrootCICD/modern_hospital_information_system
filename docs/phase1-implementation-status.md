@@ -2,6 +2,8 @@
 
 Status: Completed, with follow-up items moved into Phase 2/3.
 
+Backend policy update: repository now excludes .NET backend projects; Go/Rust is the only backend path.
+
 ## Completed in this batch
 
 - Next.js locale route shell (`/en`, `/zh`) with middleware redirect behavior.

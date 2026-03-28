@@ -1,67 +1,114 @@
-name: "CodeQL-update"
+name: ci-and-codeql
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch:
 
 permissions:
-  contents: write  # Grant write permission for contents
-  security-events: write  # Grant write permission for security events
-  actions: read  # Ensure actions can be accessed
-  checks: write  # Ensure checks can be accessed and updated
+  contents: read
+  security-events: write
 
 jobs:
-  analyze:
+  go-backend:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        language: ['csharp']
+        service:
+          - identity-access-service
+          - patient-chart-service
+          - order-clinical-service
+          - lab-transfer-service
+          - sync-gateway-service
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Setup .NET Core
-      uses: actions/setup-dotnet@v3
-      with:
-        dotnet-version: '7.x'  # Adjust based on your project's .NET version
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
 
-    - name: Initialize the CodeQL engine
-      uses: github/codeql-action/init@v2
-      with:
-        languages: ${{ matrix.language }}
+      - name: Build service
+        run: go build ./...
+        working-directory: services/go/${{ matrix.service }}
 
-    - name: Restore dependencies for SHIS.HisOrder.Console.Gateway project
-      run: dotnet restore
-      working-directory: SHIS.HisOrder.Console.Gateway
+  rust-backend:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - audit-integrity-service
+          - document-proof-service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Restore dependencies for SHIS.HisOrder.MVC project
-      run: dotnet restore
-      working-directory: SHIS.HisOrder.MVC
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
 
-    - name: Restore dependencies for SHIS.MOHD.WebAPI project
-      run: dotnet restore
-      working-directory: SHIS.MOHD.WebAPI
+      - name: Cargo check
+        run: cargo check
+        working-directory: services/rust/${{ matrix.service }}
 
-    - name: Build SHIS.HisOrder.Console.Gateway project
-      run: dotnet build --no-restore --configuration Release --verbosity detailed
-      working-directory: SHIS.HisOrder.Console.Gateway
+  web-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Build SHIS.HisOrder.MVC project
-      run: dotnet build --no-restore --configuration Release --verbosity detailed
-      working-directory: SHIS.HisOrder.MVC
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web-next/package.json
 
-    - name: Build SHIS.MOHD.WebAPI project
-      run: dotnet build --no-restore --configuration Release --verbosity detailed
-      working-directory: SHIS.MOHD.WebAPI
+      - name: Install deps
+        run: npm install
+        working-directory: apps/web-next
 
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v2
-      with:
-        upload: true  # Ensure results are uploaded
+      - name: Build
+        run: npm run build
+        working-directory: apps/web-next
 
-    - name: Print GitHub context  # Debugging step
-      run: echo "${{ toJson(github) }}"
+  docs-check:
+    runs-on: ubuntu-latest
+    needs: [go-backend, rust-backend, web-frontend]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate docs plan files
+        run: |
+          test -f docs/modernization-migration-plan.md
+          test -f docs/phase1-implementation-status.md
+          test -f docs/phase2-implementation-status.md
+          test -f docs/phase3-implementation-status.md
+          test -f docs/phase4-implementation-status.md
+
+  codeql:
+    runs-on: ubuntu-latest
+    needs: [go-backend, rust-backend, web-frontend]
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [go, javascript]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3

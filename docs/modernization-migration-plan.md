@@ -4,30 +4,30 @@
 
 - Completed:
   - Phase 0 foundation scaffolding (Next.js, Go, Rust, infra baseline).
-  - Phase 1 frontend shell (locale routing, session auth scaffold, protected pages, BFF endpoints, Nginx strangler routes).
+  - Phase 1 frontend shell (locale routing, session auth scaffold, protected pages, BFF endpoints, Nginx routes).
   - Phase 2 backend kickoff (identity, lab-transfer, sync-gateway APIs and ingress routes).
   - Phase 3 kickoff (Supabase-oriented patient-chart service integration and SQL migration baseline).
+  - Legacy .NET backend projects removed from repository and delivery path.
+  - Phase 4 kickoff (Kafka event emission hooks in Go services).
 - In progress:
   - Service persistence hardening (move in-memory stores to Supabase/Redis).
   - Contract stabilization across BFF and microservices.
 - Not started:
-  - Kafka outbox/event stream wiring.
+  - Kafka outbox/event stream consumers and replay handling.
   - full observability SLO dashboards.
   - blockchain anchoring pilot implementation.
 
 ## 1) Current-State Scan Summary
 
 ### Existing solution layout
-- `SHIS.HisOrder.MVC` (`net6.0`): monolithic ASP.NET MVC + Razor + SignalR + EF Core/PostgreSQL.
-- `SHIS.MOHD.WebAPI` (`net6.0`): JWT-based API for MOHD-side records and upload tasks.
-- `SHIS.Lab.WebAPI` (`net6.0`): transfer-data API with EF migrations and Swagger.
-- `SHIS.HisOrder.Console.Gateway` (`net6.0`): console/offline synchronization gateway with import/export flow.
-- SQL snapshots/dumps exist at repository root, indicating schema-first operational history.
+- Legacy .NET projects were present originally but are now removed from repository.
+- Active backend stack is Go-Gin microservices + Rust services.
+- SQL snapshots/dumps at repository root remain as migration references.
 
 ### Key migration implications
-- Domain logic is spread across MVC areas/controllers/services; needs explicit bounded-context split before service extraction.
-- Offline synchronization in console gateway is business-critical and should become first-class microservice workflows.
-- Existing PostgreSQL usage lowers migration risk to Supabase (also PostgreSQL), but schema governance and auth model must be redesigned.
+- Domain logic originated in the legacy monolith and still requires domain-by-domain parity validation.
+- Offline synchronization remains business-critical and is now modeled in `sync-gateway-service`.
+- Existing PostgreSQL usage lowers migration risk to Supabase (also PostgreSQL), but schema governance and auth model still requires hardening.
 
 ## 2) Target Architecture (Modern Stack)
 
@@ -61,7 +61,7 @@
 3. `order-clinical-service` (Go)
 - SOAP/order flows migrated from MVC areas.
 4. `lab-transfer-service` (Go)
-- ownership of current `SHIS.Lab.WebAPI` transfer responsibilities.
+- ownership of legacy transfer responsibilities.
 5. `sync-gateway-service` (Go)
 - replace console gateway import/export with API + worker model.
 6. `audit-integrity-service` (Rust)
@@ -70,9 +70,9 @@
 - record digest creation, Merkle root generation, chain anchoring adapter.
 
 ### Anti-corruption layer during migration
-- Keep legacy .NET apps running behind Nginx while new services are carved out.
-- Add API facade layer to prevent frontend coupling to legacy controllers.
+- Keep API facade/BFF boundaries to isolate frontend from direct service coupling.
 - Migrate by capability, not by project file.
+- Maintain compatibility contracts for any remaining external legacy dependencies.
 
 ## 4) Phased Execution Plan
 
@@ -110,9 +110,8 @@
 - Define and monitor SLOs for auth success latency, chart retrieval latency, sync completion SLA, and audit-verification latency.
 
 ### Phase 6: Legacy decommission
-- Freeze legacy .NET write paths.
-- Run read-only mode for rollback window.
-- Decommission MVC/WebAPI/console components after acceptance and legal sign-off.
+- Decommission remaining non-Go/Rust backend dependencies after acceptance and legal sign-off.
+- Keep rollback runbooks and cutover metrics for 30-day post-cutover period.
 
 ## 5) Infrastructure Rollout Order (Requested Components)
 

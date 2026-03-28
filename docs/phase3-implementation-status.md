@@ -22,3 +22,4 @@ Status: Kickoff implemented (schema baseline + service integration); migration e
 - CDC/dual-write cutover mechanism.
 - Tenant-aware RLS policies beyond `service_role` baseline.
 - Full schema mapping report for all legacy tables.
+- Redis caching integration for high-volume read paths.
