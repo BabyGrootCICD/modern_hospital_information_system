@@ -34,6 +34,7 @@ Extract backend capabilities from legacy monolith boundaries into independently 
 - Integrity verification APIs are now available, but service-to-service auth on those paths is still pending.
 - Integrity/proof persistence now supports Supabase hooks, but cross-service transaction consistency is pending.
 - Integrity/proof retry behavior now exists, but durable queue storage is pending.
+- Integrity/proof dead-letter handling now exists, but durable queue storage and replay workflows are pending.
 
 ## Next incremental step
 

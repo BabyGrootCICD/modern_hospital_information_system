@@ -27,3 +27,4 @@ Status: Kickoff implemented (schema baseline + service integration); migration e
 - Integrity and proof tables for Rust services (chain hash / anchor tx metadata) migration scripts.
 - Reconciliation endpoints can now be used to validate Supabase persistence readiness.
 - Retry queue status and retry execution endpoints now support persistence recovery workflows.
+- Dead-letter queue inspection endpoints now support triage for repeated persistence failures.
