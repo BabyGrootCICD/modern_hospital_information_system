@@ -32,6 +32,7 @@ Extract backend capabilities from legacy monolith boundaries into independently 
 - Kafka publish hooks now exist, but outbox + durable consumer flows are still pending.
 - Metrics endpoints now exist, but SLO alerting and trace correlation are pending.
 - Integrity verification APIs are now available, but service-to-service auth on those paths is still pending.
+- Integrity/proof persistence now supports Supabase hooks, but cross-service transaction consistency is pending.
 
 ## Next incremental step
 

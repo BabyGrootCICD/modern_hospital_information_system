@@ -23,8 +23,13 @@ Status: Integrity/blockchain pilot APIs implemented with simulated anchoring.
 ## Current limits
 
 - Anchoring is currently simulated (no live blockchain transaction submission).
-- Data is in-memory (no durable Supabase persistence yet).
+- Durable Supabase persistence is now optional and environment-driven.
 - No cryptographic signature verification against clinical signer identities yet.
+
+## Progress since kickoff
+
+- Added Supabase persistence hooks in both Rust services (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`).
+- Added reconcile endpoints to check whether integrity/proof records are persisted.
 
 ## Next step
 

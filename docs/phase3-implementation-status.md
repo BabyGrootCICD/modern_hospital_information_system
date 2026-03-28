@@ -25,3 +25,4 @@ Status: Kickoff implemented (schema baseline + service integration); migration e
 - Redis caching integration for high-volume read paths.
 - Supabase operational dashboards in Grafana tied to migration cutover KPIs.
 - Integrity and proof tables for Rust services (chain hash / anchor tx metadata) migration scripts.
+- Reconciliation endpoints can now be used to validate Supabase persistence readiness.

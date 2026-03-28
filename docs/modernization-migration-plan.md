@@ -11,13 +11,14 @@
   - Phase 4 kickoff (Kafka event emission hooks in Go services).
   - Phase 5 kickoff (Prometheus metrics endpoints across Go services + Prometheus/OTEL stack wiring).
   - Integrity pilot kickoff (Rust digest chain + Merkle root + proof anchor APIs).
+  - Phase 7 kickoff (Supabase persistence hooks and reconciliation endpoints for Rust integrity/proof services).
 - In progress:
   - Service persistence hardening (move in-memory stores to Supabase/Redis).
   - Contract stabilization across BFF and microservices.
 - Not started:
   - Kafka outbox/event stream consumers and replay handling.
   - full observability SLO dashboards and alert policies.
-  - blockchain network adapter for real chain transactions (current anchor is simulated).
+  - blockchain network adapter for real chain transactions (current anchor remains simulated).
 
 ## 1) Current-State Scan Summary
 
@@ -164,6 +165,7 @@
 - Implemented:
   - `audit-integrity-service` now supports event hashing, chain verification, and Merkle-root generation APIs.
   - `document-proof-service` now supports proof anchoring and anchor verification APIs (simulated chain metadata).
+  - both Rust services now support optional Supabase persistence and reconciliation endpoints.
   - Next.js BFF proxy routes and Nginx ingress routes are in place for these Rust services.
 - Pending:
   - replace simulated anchor with real blockchain transaction submission.

@@ -6,6 +6,7 @@ Backend policy update: repository now excludes .NET backend projects; Go/Rust is
 
 Observability note: frontend routes are now served behind infra that includes Prometheus/OTEL plumbing for backend services.
 Integrity note: frontend BFF now also proxies integrity/proof APIs from Rust services.
+Durability note: integrity/proof APIs now expose reconciliation endpoints for persistence checks.
 
 ## Completed in this batch
 

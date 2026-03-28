@@ -22,3 +22,4 @@ Status: Kickoff implemented; durable event pipeline hardening pending.
 - Schema/version contracts for event payloads.
 - Audit event stream integration with Rust integrity services.
 - Event-driven trigger from transfer/sync completion to integrity event creation.
+- Durable outbox integration with integrity/proof persistence flows.

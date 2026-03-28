@@ -27,3 +27,4 @@ Status: Kickoff implemented; SLO and tracing hardening pending.
 - Alert rules for SLO burn rates.
 - Log aggregation backend (Loki) and trace backend (Tempo) integration.
 - Integrity/proof API latency and failure-rate panels.
+- Reconciliation result metrics for Supabase persistence health.
