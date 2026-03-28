@@ -12,3 +12,52 @@ body {
 h1 {
   margin: 0 0 12px;
 }
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.topbar p {
+  margin: 0;
+}
+
+.topnav {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.topnav a {
+  color: #0b5ec2;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.card {
+  margin-top: 16px;
+  background: #fff;
+  border: 1px solid #dce6f9;
+  border-radius: 10px;
+  padding: 18px;
+  max-width: 640px;
+}
+
+.form {
+  display: grid;
+  gap: 12px;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+}
+
+input,
+select,
+button {
+  font: inherit;
+  padding: 8px 10px;
+}
