@@ -16,7 +16,9 @@ use tokio::sync::RwLock;
 #[derive(Clone)]
 struct AppState {
     anchors: Arc<RwLock<HashMap<String, AnchorRecord>>>,
-    retry_queue: Arc<RwLock<Vec<AnchorRecord>>>,
+    retry_queue: Arc<RwLock<Vec<RetryItem>>>,
+    dead_letters: Arc<RwLock<Vec<RetryItem>>>,
+    retry_max_attempts: u8,
     supabase: Option<SupabaseConfig>,
     client: Client,
 }
@@ -49,6 +51,12 @@ struct AnchorResponse {
     persisted: bool,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+struct RetryItem {
+    anchor: AnchorRecord,
+    attempts: u8,
+}
+
 #[derive(Serialize)]
 struct VerifyAnchorResponse {
     found: bool,
@@ -65,6 +73,8 @@ struct ReconcileResponse {
 #[derive(Serialize)]
 struct RetryStatusResponse {
     queued: usize,
+    dead_letters: usize,
+    max_attempts: u8,
     supabase_configured: bool,
 }
 
@@ -73,6 +83,7 @@ struct RetryRunResponse {
     attempted: usize,
     succeeded: usize,
     failed: usize,
+    moved_to_dead_letter: usize,
 }
 
 #[derive(Serialize)]
@@ -176,7 +187,10 @@ async fn anchor(State(state): State<AppState>, Json(req): Json<AnchorRequest>) -
     let persisted = supabase_insert_anchor(&state, &record).await;
     if !persisted && state.supabase.is_some() {
         let mut queue = state.retry_queue.write().await;
-        queue.push(record.clone());
+        queue.push(RetryItem {
+            anchor: record.clone(),
+            attempts: 1,
+        });
     }
     Json(AnchorResponse { anchor: record, persisted })
 }
@@ -207,8 +221,11 @@ async fn reconcile_anchor(
 
 async fn retry_status(State(state): State<AppState>) -> Json<RetryStatusResponse> {
     let queue = state.retry_queue.read().await;
+    let dead_letters = state.dead_letters.read().await;
     Json(RetryStatusResponse {
         queued: queue.len(),
+        dead_letters: dead_letters.len(),
+        max_attempts: state.retry_max_attempts,
         supabase_configured: state.supabase.is_some(),
     })
 }
@@ -221,29 +238,47 @@ async fn run_retry_once(state: &AppState) -> RetryRunResponse {
 
     let mut succeeded = 0usize;
     let mut failed_items = Vec::new();
+    let mut dead_items = Vec::new();
     for item in pending {
-        if supabase_insert_anchor(state, &item).await {
+        if supabase_insert_anchor(state, &item.anchor).await {
             succeeded += 1;
         } else {
-            failed_items.push(item);
+            let mut next = item.clone();
+            next.attempts = next.attempts.saturating_add(1);
+            if next.attempts >= state.retry_max_attempts {
+                dead_items.push(next);
+            } else {
+                failed_items.push(next);
+            }
         }
     }
 
     let failed = failed_items.len();
+    let moved_to_dead_letter = dead_items.len();
     {
         let mut queue = state.retry_queue.write().await;
         queue.extend(failed_items);
     }
+    if moved_to_dead_letter > 0 {
+        let mut dlq = state.dead_letters.write().await;
+        dlq.extend(dead_items);
+    }
 
     RetryRunResponse {
-        attempted: succeeded + failed,
+        attempted: succeeded + failed + moved_to_dead_letter,
         succeeded,
         failed,
+        moved_to_dead_letter,
     }
 }
 
 async fn retry_run(State(state): State<AppState>) -> Json<RetryRunResponse> {
     Json(run_retry_once(&state).await)
+}
+
+async fn dead_letters(State(state): State<AppState>) -> Json<Vec<RetryItem>> {
+    let dlq = state.dead_letters.read().await;
+    Json(dlq.clone())
 }
 
 #[tokio::main]
@@ -261,6 +296,11 @@ async fn main() {
     let state = AppState {
         anchors: Arc::new(RwLock::new(HashMap::new())),
         retry_queue: Arc::new(RwLock::new(Vec::new())),
+        dead_letters: Arc::new(RwLock::new(Vec::new())),
+        retry_max_attempts: std::env::var("RETRY_MAX_ATTEMPTS")
+            .ok()
+            .and_then(|v| v.parse::<u8>().ok())
+            .unwrap_or(3),
         supabase,
         client: Client::new(),
     };
@@ -283,6 +323,7 @@ async fn main() {
         .route("/v1/proofs/reconcile/:anchor_id", get(reconcile_anchor))
         .route("/v1/proofs/retry/status", get(retry_status))
         .route("/v1/proofs/retry/run", post(retry_run))
+        .route("/v1/proofs/retry/deadletters", get(dead_letters))
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8092")
