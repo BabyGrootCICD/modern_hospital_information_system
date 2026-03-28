@@ -15,13 +15,16 @@
   - Phase 8 kickoff (retry queues + background reconciliation workers for failed integrity/proof persistence).
   - Phase 9 kickoff (failure-threshold dead-letter handling for integrity/proof retry flows).
   - Phase 10 kickoff (Redis-backed retry/dead-letter durability + dead-letter replay endpoints for Rust services).
+  - Phase 11 kickoff (containerization: Dockerfiles for all Go/Rust services + build-based compose stack).
+  - Phase 12 kickoff (Go Redis durability, Kafka outbox/DLQ + idempotent consumer baseline, JWT tenant propagation, observability stack completion, blockchain adapter/reporting, CI + Robot e2e baseline).
 - In progress:
-  - Service persistence hardening (move in-memory stores to Supabase/Redis).
+  - Service persistence hardening (move remaining in-memory state to Supabase tables where needed).
   - Contract stabilization across BFF and microservices.
+  - Kafka consumer expansion beyond `sync.commands` baseline.
+  - End-to-end container deployment hardening (healthchecks, rollout policy, image publishing workflow).
 - Not started:
-  - Kafka outbox/event stream consumers and replay handling.
-  - full observability SLO dashboards and alert policies.
-  - blockchain network adapter for real chain transactions (current anchor remains simulated).
+  - full production chain adapter integration and chain transaction finality verification.
+  - legal/compliance sign-off workflow for generated audit reports.
 
 ## 1) Current-State Scan Summary
 
@@ -211,3 +214,27 @@
 3. Add service-to-service auth and tenant propagation headers.
 4. Add Grafana dashboards for retry/dead-letter depth, replay volume, and persistence failure rates.
 5. Implement Grafana SLO alerts before broader production traffic cutover.
+
+## 11) Remaining Phases / TODOs (Post-Phase 11)
+
+1. Complete data durability migration for Go services:
+- replace in-memory session/transfer/sync job stores with Supabase + Redis.
+2. Complete event backbone hardening:
+- add transactional outbox and idempotent consumers with replay and dead-letter semantics.
+3. Complete auth and tenancy controls:
+- enforce service-to-service JWT validation and tenant propagation on write paths.
+4. Complete observability:
+- implement Grafana dashboards + SLO alert rules + Loki/Tempo integration.
+5. Complete blockchain productionization:
+- replace simulated anchoring with real chain adapter and legal-grade audit report format.
+6. Complete runtime/CI container hardening:
+- image scan/signing, compose/k8s health probes, and release promotion pipeline.
+
+## 12) Remaining TODOs (Post-Phase 12)
+
+1. Migrate `identity`, `lab-transfer`, and `sync-gateway` state from Redis snapshots to Supabase-backed durable tables with migration scripts.
+2. Expand idempotent consumer coverage to all required topics (`transfer.events`, `audit.events`, retry/dead-letter events).
+3. Add mTLS/service identity and key rotation for internal JWT secret distribution.
+4. Add Alertmanager routing + escalation policies and tenant-segmented Grafana dashboards.
+5. Integrate production blockchain endpoint and verify inclusion/finality with retry/backoff strategy.
+6. Add signed SBOM generation and enforcement gates in release promotion.

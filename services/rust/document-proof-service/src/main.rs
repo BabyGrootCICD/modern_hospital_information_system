@@ -21,6 +21,8 @@ struct AppState {
     dead_letters: Arc<RwLock<Vec<RetryItem>>>,
     retry_max_attempts: u8,
     redis_url: Option<String>,
+    chain_adapter_url: Option<String>,
+    chain_adapter_token: Option<String>,
     supabase: Option<SupabaseConfig>,
     client: Client,
 }
@@ -51,6 +53,13 @@ struct AnchorRecord {
 struct AnchorResponse {
     anchor: AnchorRecord,
     persisted: bool,
+    adapter_mode: String,
+}
+
+#[derive(Deserialize)]
+struct ChainAnchorAdapterResponse {
+    tx_hash: String,
+    block_height: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -231,11 +240,36 @@ async fn healthz() -> Json<Health<'static>> {
     })
 }
 
+async fn submit_chain_anchor(state: &AppState, merkle_root: &str, network: &str) -> (String, u64, String) {
+    let ts = now_epoch();
+    if let Some(url) = &state.chain_adapter_url {
+        let payload = json!({
+            "merkle_root": merkle_root,
+            "network": network,
+            "anchored_at": ts
+        });
+        let mut req = state.client.post(url).json(&payload);
+        if let Some(token) = &state.chain_adapter_token {
+            req = req.bearer_auth(token);
+        }
+        if let Ok(resp) = req.send().await {
+            if resp.status().is_success() {
+                if let Ok(parsed) = resp.json::<ChainAnchorAdapterResponse>().await {
+                    return (parsed.tx_hash, parsed.block_height, "external-adapter".to_string());
+                }
+            }
+        }
+    }
+    let tx_hash = sha256_hex(&format!("tx:{}:{}", merkle_root, ts));
+    let block_height = (ts % 1_000_000) + 10_000;
+    (tx_hash, block_height, "simulated".to_string())
+}
+
 async fn anchor(State(state): State<AppState>, Json(req): Json<AnchorRequest>) -> Json<AnchorResponse> {
     let ts = now_epoch();
     let anchor_id = sha256_hex(&format!("{}:{}:{ts}", req.network, req.merkle_root));
-    let tx_hash = sha256_hex(&format!("tx:{}:{}", req.merkle_root, ts));
-    let block_height = (ts % 1_000_000) + 10_000;
+    let (tx_hash, block_height, adapter_mode) =
+        submit_chain_anchor(&state, &req.merkle_root, &req.network).await;
 
     let record = AnchorRecord {
         anchor_id: anchor_id.clone(),
@@ -260,7 +294,11 @@ async fn anchor(State(state): State<AppState>, Json(req): Json<AnchorRequest>) -
         drop(queue);
         persist_retry_state_to_redis(&state).await;
     }
-    Json(AnchorResponse { anchor: record, persisted })
+    Json(AnchorResponse {
+        anchor: record,
+        persisted,
+        adapter_mode,
+    })
 }
 
 async fn verify_anchor(
@@ -392,6 +430,12 @@ async fn main() {
             .and_then(|v| v.parse::<u8>().ok())
             .unwrap_or(3),
         redis_url: std::env::var("REDIS_URL")
+            .ok()
+            .filter(|v| !v.trim().is_empty()),
+        chain_adapter_url: std::env::var("CHAIN_ADAPTER_URL")
+            .ok()
+            .filter(|v| !v.trim().is_empty()),
+        chain_adapter_token: std::env::var("CHAIN_ADAPTER_TOKEN")
             .ok()
             .filter(|v| !v.trim().is_empty()),
         supabase,

@@ -1,85 +1,36 @@
 version: "3.9"
 
 services:
-  nginx:
-    image: nginx:1.27-alpine
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - web-next
-      - identity-access-service
-      - patient-chart-service
-      - order-clinical-service
-      - lab-transfer-service
-      - sync-gateway-service
-      - audit-integrity-service
-      - document-proof-service
-      - grafana
-      - prometheus
-      - redis
-
-  web-next:
-    image: node:22-alpine
-    working_dir: /workspace
-    command: sh -c "npm install && npm run dev -- --hostname 0.0.0.0 --port 3001"
-    volumes:
-      - ../apps/web-next:/workspace
-    ports:
-      - "3001:3001"
-
   identity-access-service:
-    image: golang:1.23-alpine
-    working_dir: /workspace
-    command: sh -c "go run ./cmd/api"
+    build:
+      context: ../services/go/identity-access-service
+      dockerfile: Dockerfile
     environment:
       KAFKA_BROKERS: kafka:9092
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       OTEL_SERVICE_NAME: identity-access-service
-    volumes:
-      - ../services/go/identity-access-service:/workspace
     ports:
       - "8081:8081"
+    depends_on:
+      - kafka
+      - redis
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8081/healthz >/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
 
-  lab-transfer-service:
-    image: golang:1.23-alpine
-    working_dir: /workspace
-    command: sh -c "go run ./cmd/api"
-    environment:
-      KAFKA_BROKERS: kafka:9092
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-}
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
-      OTEL_SERVICE_NAME: lab-transfer-service
-    volumes:
-      - ../services/go/lab-transfer-service:/workspace
-    ports:
-      - "8084:8084"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8084/healthz >/dev/null || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-
   patient-chart-service:
-    image: golang:1.23-alpine
-    working_dir: /workspace
-    command: sh -c "go run ./cmd/api"
+    build:
+      context: ../services/go/patient-chart-service
+      dockerfile: Dockerfile
     environment:
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       OTEL_SERVICE_NAME: patient-chart-service
-    volumes:
-      - ../services/go/patient-chart-service:/workspace
     ports:
       - "8082:8082"
     healthcheck:
@@ -88,35 +39,13 @@ services:
       timeout: 5s
       retries: 5
 
-  sync-gateway-service:
-    image: golang:1.23-alpine
-    working_dir: /workspace
-    command: sh -c "go run ./cmd/api"
-    environment:
-      KAFKA_BROKERS: kafka:9092
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-}
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
-      OTEL_SERVICE_NAME: sync-gateway-service
-    volumes:
-      - ../services/go/sync-gateway-service:/workspace
-    ports:
-      - "8085:8085"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8085/healthz >/dev/null || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-
   order-clinical-service:
-    image: golang:1.23-alpine
-    working_dir: /workspace
-    command: sh -c "go run ./cmd/api"
+    build:
+      context: ../services/go/order-clinical-service
+      dockerfile: Dockerfile
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       OTEL_SERVICE_NAME: order-clinical-service
-    volumes:
-      - ../services/go/order-clinical-service:/workspace
     ports:
       - "8083:8083"
     healthcheck:
@@ -125,30 +54,72 @@ services:
       timeout: 5s
       retries: 5
 
+  lab-transfer-service:
+    build:
+      context: ../services/go/lab-transfer-service
+      dockerfile: Dockerfile
+    environment:
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: lab-transfer-service
+    ports:
+      - "8084:8084"
+    depends_on:
+      - kafka
+      - redis
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8084/healthz >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  sync-gateway-service:
+    build:
+      context: ../services/go/sync-gateway-service
+      dockerfile: Dockerfile
+    environment:
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: sync-gateway-service
+    ports:
+      - "8085:8085"
+    depends_on:
+      - kafka
+      - redis
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8085/healthz >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
   audit-integrity-service:
-    image: rust:1.81
-    working_dir: /workspace
-    command: sh -c "cargo run"
+    build:
+      context: ../services/rust/audit-integrity-service
+      dockerfile: Dockerfile
     environment:
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
       RETRY_MAX_ATTEMPTS: ${RETRY_MAX_ATTEMPTS:-3}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       LEGAL_REPORT_SIGNING_SECRET: ${LEGAL_REPORT_SIGNING_SECRET:-dev-legal-secret}
-    volumes:
-      - ../services/rust/audit-integrity-service:/workspace
     ports:
       - "8091:8091"
+    depends_on:
+      - redis
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8091/healthz >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8091/healthz >/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
 
   document-proof-service:
-    image: rust:1.81
-    working_dir: /workspace
-    command: sh -c "cargo run"
+    build:
+      context: ../services/rust/document-proof-service
+      dockerfile: Dockerfile
     environment:
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
@@ -156,12 +127,12 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       CHAIN_ADAPTER_URL: ${CHAIN_ADAPTER_URL:-}
       CHAIN_ADAPTER_TOKEN: ${CHAIN_ADAPTER_TOKEN:-}
-    volumes:
-      - ../services/rust/document-proof-service:/workspace
     ports:
       - "8092:8092"
+    depends_on:
+      - redis
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8092/healthz >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8092/healthz >/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -218,14 +189,6 @@ services:
     ports:
       - "3200:3200"
 
-  grafana:
-    image: grafana/grafana:11.5.2
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning
-      - ./grafana/dashboards:/var/lib/grafana/dashboards
-
   prometheus:
     image: prom/prometheus:v2.54.1
     ports:
@@ -233,6 +196,18 @@ services:
     volumes:
       - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.111.0

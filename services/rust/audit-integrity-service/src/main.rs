@@ -20,6 +20,7 @@ struct AppState {
     dead_letters: Arc<RwLock<Vec<RetryItem>>>,
     retry_max_attempts: u8,
     redis_url: Option<String>,
+    legal_report_signing_secret: String,
     supabase: Option<SupabaseConfig>,
     client: Client,
 }
@@ -71,6 +72,18 @@ struct VerifyResponse {
 struct MerkleResponse {
     root_hash: String,
     leaf_count: usize,
+}
+
+#[derive(Serialize)]
+struct LegalAuditReport {
+    report_id: String,
+    aggregate_id: String,
+    generated_at: u64,
+    chain_valid: bool,
+    event_count: usize,
+    latest_chain_hash: Option<String>,
+    merkle_root: String,
+    report_signature: String,
 }
 
 #[derive(Serialize)]
@@ -347,6 +360,60 @@ async fn merkle(State(state): State<AppState>) -> Json<MerkleResponse> {
     })
 }
 
+async fn legal_report(
+    Path(aggregate_id): Path<String>,
+    State(state): State<AppState>,
+) -> Json<LegalAuditReport> {
+    let events = state.events.read().await;
+    let filtered = events
+        .iter()
+        .filter(|x| x.aggregate_id == aggregate_id)
+        .cloned()
+        .collect::<Vec<_>>();
+    drop(events);
+
+    let mut previous = sha256_hex("genesis");
+    let mut chain_valid = true;
+    for e in &filtered {
+        let recomputed = sha256_hex(&format!("{previous}{}{}", e.payload_hash, e.created_at));
+        if recomputed != e.chain_hash {
+            chain_valid = false;
+            break;
+        }
+        previous = e.chain_hash.clone();
+    }
+
+    let generated_at = now_epoch();
+    let merkle = merkle_root(filtered.iter().map(|e| e.chain_hash.clone()).collect::<Vec<_>>());
+    let latest_chain_hash = filtered.last().map(|x| x.chain_hash.clone());
+    let report_id = sha256_hex(&format!("{aggregate_id}:{generated_at}:{merkle}"));
+    let payload = json!({
+        "report_id": report_id,
+        "aggregate_id": aggregate_id,
+        "generated_at": generated_at,
+        "chain_valid": chain_valid,
+        "event_count": filtered.len(),
+        "latest_chain_hash": latest_chain_hash,
+        "merkle_root": merkle
+    });
+    let report_signature = sha256_hex(&format!(
+        "{}:{}",
+        payload,
+        state.legal_report_signing_secret
+    ));
+
+    Json(LegalAuditReport {
+        report_id,
+        aggregate_id,
+        generated_at,
+        chain_valid,
+        event_count: filtered.len(),
+        latest_chain_hash,
+        merkle_root: merkle,
+        report_signature,
+    })
+}
+
 async fn reconcile(Path(event_id): Path<String>, State(state): State<AppState>) -> Json<ReconcileResponse> {
     let persisted = supabase_has_event(&state, &event_id).await;
     Json(ReconcileResponse {
@@ -463,6 +530,10 @@ async fn main() {
         redis_url: std::env::var("REDIS_URL")
             .ok()
             .filter(|v| !v.trim().is_empty()),
+        legal_report_signing_secret: std::env::var("LEGAL_REPORT_SIGNING_SECRET")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .unwrap_or_else(|| "dev-legal-secret".to_string()),
         supabase,
         client: Client::new(),
     };
@@ -485,6 +556,7 @@ async fn main() {
         .route("/v1/integrity/events/:aggregate_id", get(list_events))
         .route("/v1/integrity/verify/:aggregate_id", get(verify_events))
         .route("/v1/integrity/merkle-root", get(merkle))
+        .route("/v1/integrity/legal-report/:aggregate_id", get(legal_report))
         .route("/v1/integrity/reconcile/:event_id", get(reconcile))
         .route("/v1/integrity/retry/status", get(retry_status))
         .route("/v1/integrity/retry/run", post(retry_run))

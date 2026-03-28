@@ -14,8 +14,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
 )
 
@@ -33,9 +35,34 @@ type Session struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
+type OutboxEvent struct {
+	ID          string          `json:"id"`
+	Topic       string          `json:"topic"`
+	Key         string          `json:"key"`
+	Payload     json.RawMessage `json:"payload"`
+	Attempts    int             `json:"attempts"`
+	CreatedAt   time.Time       `json:"created_at"`
+	LastError   string          `json:"last_error,omitempty"`
+	Correlation string          `json:"correlation,omitempty"`
+	TenantID    string          `json:"tenant_id,omitempty"`
+}
+
+type AppEnv struct {
+	redis            *redis.Client
+	outboxMaxAttempt int
+	jwtSecret        string
+}
+
+const (
+	sessionsRedisKey         = "identity:sessions"
+	outboxPendingRedisKey    = "identity:outbox:pending"
+	outboxDeadLetterRedisKey = "identity:outbox:dead_letters"
+	outboxProcessedRedisKey  = "identity:outbox:processed"
+)
+
 var (
-	sessions   = map[string]Session{}
-	sessionsMu sync.RWMutex
+	sessions          = map[string]Session{}
+	sessionsMu        sync.RWMutex
 	httpRequestsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "http_requests_total",
@@ -69,34 +96,218 @@ func bearerToken(header string) string {
 	return strings.TrimSpace(parts[1])
 }
 
-func publishEvent(topic string, payload any) {
-	brokers := os.Getenv("KAFKA_BROKERS")
-	if brokers == "" {
+func loadSessions(ctx context.Context, env *AppEnv) {
+	if env.redis == nil {
 		return
 	}
+	raw, err := env.redis.Get(ctx, sessionsRedisKey).Result()
+	if err != nil {
+		return
+	}
+	var restored map[string]Session
+	if err := json.Unmarshal([]byte(raw), &restored); err != nil {
+		return
+	}
+	sessionsMu.Lock()
+	sessions = restored
+	sessionsMu.Unlock()
+}
+
+func persistSessions(ctx context.Context, env *AppEnv) {
+	if env.redis == nil {
+		return
+	}
+	sessionsMu.RLock()
+	copyMap := make(map[string]Session, len(sessions))
+	for k, v := range sessions {
+		copyMap[k] = v
+	}
+	sessionsMu.RUnlock()
+	raw, err := json.Marshal(copyMap)
+	if err != nil {
+		return
+	}
+	_ = env.redis.Set(ctx, sessionsRedisKey, raw, 0).Err()
+}
+
+func enqueueOutbox(ctx context.Context, env *AppEnv, topic, key, tenantID string, payload any) {
 	encoded, err := json.Marshal(payload)
 	if err != nil {
-		log.Printf("failed to marshal event: %v", err)
+		log.Printf("failed to marshal event payload: %v", err)
 		return
 	}
+	id, err := generateToken()
+	if err != nil {
+		log.Printf("failed to generate event id: %v", err)
+		return
+	}
+	evt := OutboxEvent{
+		ID:        id,
+		Topic:     topic,
+		Key:       key,
+		Payload:   encoded,
+		Attempts:  0,
+		CreatedAt: time.Now().UTC(),
+		TenantID:  tenantID,
+	}
+	raw, err := json.Marshal(evt)
+	if err != nil {
+		return
+	}
+	if env.redis == nil {
+		publishOutboxEvent(ctx, env, evt)
+		return
+	}
+	if err := env.redis.RPush(ctx, outboxPendingRedisKey, raw).Err(); err != nil {
+		log.Printf("failed to enqueue outbox event: %v", err)
+	}
+}
 
+func publishOutboxEvent(ctx context.Context, env *AppEnv, evt OutboxEvent) error {
+	brokers := os.Getenv("KAFKA_BROKERS")
+	if brokers == "" {
+		return nil
+	}
 	writer := &kafka.Writer{
 		Addr:     kafka.TCP(strings.Split(brokers, ",")...),
-		Topic:    topic,
+		Topic:    evt.Topic,
 		Balancer: &kafka.LeastBytes{},
 	}
 	defer writer.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	msgKey := evt.Key
+	if msgKey == "" {
+		msgKey = evt.ID
+	}
+	timeoutCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	if err := writer.WriteMessages(ctx, kafka.Message{Key: []byte(time.Now().UTC().Format(time.RFC3339Nano)), Value: encoded}); err != nil {
-		log.Printf("failed to publish event to %s: %v", topic, err)
+	return writer.WriteMessages(timeoutCtx, kafka.Message{
+		Key: []byte(msgKey), Value: evt.Payload,
+		Headers: []kafka.Header{
+			{Key: "event_id", Value: []byte(evt.ID)},
+			{Key: "tenant_id", Value: []byte(evt.TenantID)},
+		},
+	})
+}
+
+func startOutboxPump(ctx context.Context, env *AppEnv) {
+	if env.redis == nil {
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				processOutboxOnce(ctx, env)
+			}
+		}
+	}()
+}
+
+func processOutboxOnce(ctx context.Context, env *AppEnv) {
+	if env.redis == nil {
+		return
+	}
+	raw, err := env.redis.LPop(ctx, outboxPendingRedisKey).Result()
+	if err != nil || raw == "" {
+		return
+	}
+	var evt OutboxEvent
+	if err := json.Unmarshal([]byte(raw), &evt); err != nil {
+		return
+	}
+	alreadyDone, _ := env.redis.SIsMember(ctx, outboxProcessedRedisKey, evt.ID).Result()
+	if alreadyDone {
+		return
+	}
+	if err := publishOutboxEvent(ctx, env, evt); err == nil {
+		_ = env.redis.SAdd(ctx, outboxProcessedRedisKey, evt.ID).Err()
+		return
+	}
+	evt.Attempts++
+	if evt.Attempts >= env.outboxMaxAttempt {
+		evt.LastError = "max retry attempts reached"
+		data, _ := json.Marshal(evt)
+		_ = env.redis.RPush(ctx, outboxDeadLetterRedisKey, data).Err()
+		return
+	}
+	data, _ := json.Marshal(evt)
+	_ = env.redis.RPush(ctx, outboxPendingRedisKey, data).Err()
+}
+
+func authzMiddleware(env *AppEnv) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.Method == http.MethodGet {
+			c.Next()
+			return
+		}
+		if c.FullPath() == "/v1/auth/login" {
+			c.Next()
+			return
+		}
+		if env.jwtSecret == "" {
+			c.Next()
+			return
+		}
+		token := bearerToken(c.GetHeader("Authorization"))
+		if token == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing bearer token"})
+			return
+		}
+		parsed, err := jwt.Parse(token, func(t *jwt.Token) (any, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method")
+			}
+			return []byte(env.jwtSecret), nil
+		})
+		if err != nil || !parsed.Valid {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+			return
+		}
+		claims, ok := parsed.Claims.(jwt.MapClaims)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid claims"})
+			return
+		}
+		tenantClaim, _ := claims["tenant"].(string)
+		tenantHeader := strings.TrimSpace(c.GetHeader("X-Tenant-ID"))
+		tenantID := tenantClaim
+		if tenantID == "" {
+			tenantID = tenantHeader
+		}
+		if tenantID == "" || (tenantHeader != "" && tenantClaim != "" && tenantHeader != tenantClaim) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "tenant mismatch or missing tenant"})
+			return
+		}
+		c.Set("tenant_id", tenantID)
+		c.Next()
 	}
 }
 
 func main() {
 	const serviceName = "identity-access-service"
 	prometheus.MustRegister(httpRequestsTotal, httpRequestDuration)
+
+	ctx := context.Background()
+	var redisClient *redis.Client
+	if redisAddr := strings.TrimSpace(os.Getenv("REDIS_URL")); redisAddr != "" {
+		opt, err := redis.ParseURL(redisAddr)
+		if err == nil {
+			redisClient = redis.NewClient(opt)
+		}
+	}
+	env := &AppEnv{
+		redis:            redisClient,
+		outboxMaxAttempt: 5,
+		jwtSecret:        strings.TrimSpace(os.Getenv("INTERNAL_JWT_SECRET")),
+	}
+
+	loadSessions(ctx, env)
+	startOutboxPump(ctx, env)
 
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -112,6 +323,7 @@ func main() {
 		httpRequestsTotal.WithLabelValues(serviceName, c.Request.Method, route, status).Inc()
 		httpRequestDuration.WithLabelValues(serviceName, c.Request.Method, route).Observe(time.Since(start).Seconds())
 	})
+	r.Use(authzMiddleware(env))
 
 	r.POST("/v1/auth/login", func(c *gin.Context) {
 		var req LoginRequest
@@ -141,7 +353,10 @@ func main() {
 		sessionsMu.Lock()
 		sessions[token] = session
 		sessionsMu.Unlock()
-		publishEvent("identity.events", gin.H{
+		persistSessions(ctx, env)
+
+		enqueueOutbox(ctx, env, "identity.events", session.Token, session.Tenant, gin.H{
+			"id":         token,
 			"type":       "auth.login",
 			"username":   session.Username,
 			"role":       session.Role,
@@ -188,6 +403,46 @@ func main() {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"role": role, "policies": policies})
+	})
+
+	r.GET("/v1/outbox/status", func(c *gin.Context) {
+		if env.redis == nil {
+			c.JSON(http.StatusOK, gin.H{"redis_configured": false})
+			return
+		}
+		pending, _ := env.redis.LLen(ctx, outboxPendingRedisKey).Result()
+		dead, _ := env.redis.LLen(ctx, outboxDeadLetterRedisKey).Result()
+		done, _ := env.redis.SCard(ctx, outboxProcessedRedisKey).Result()
+		c.JSON(http.StatusOK, gin.H{
+			"redis_configured": true,
+			"pending":          pending,
+			"dead_letters":     dead,
+			"processed":        done,
+		})
+	})
+
+	r.POST("/v1/outbox/replay-deadletters", func(c *gin.Context) {
+		if env.redis == nil {
+			c.JSON(http.StatusOK, gin.H{"moved": 0, "redis_configured": false})
+			return
+		}
+		moved := 0
+		for {
+			raw, err := env.redis.LPop(ctx, outboxDeadLetterRedisKey).Result()
+			if err != nil || raw == "" {
+				break
+			}
+			var evt OutboxEvent
+			if json.Unmarshal([]byte(raw), &evt) != nil {
+				continue
+			}
+			evt.Attempts = 0
+			evt.LastError = ""
+			data, _ := json.Marshal(evt)
+			_ = env.redis.RPush(ctx, outboxPendingRedisKey, data).Err()
+			moved++
+		}
+		c.JSON(http.StatusOK, gin.H{"moved": moved})
 	})
 
 	r.GET("/healthz", func(c *gin.Context) {

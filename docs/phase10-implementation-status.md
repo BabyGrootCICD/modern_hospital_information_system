@@ -40,3 +40,4 @@ Persist retry/dead-letter workflow state across restarts and provide operator re
 - Emit retry/dead-letter lifecycle events into Kafka topics.
 - Add replay authorization and replay audit events.
 - Move from snapshot persistence to a coordinated queue model (Redis lists/streams or Supabase-backed job table).
+- Containerize all Go/Rust services with production Dockerfiles and build-based compose deployment.
