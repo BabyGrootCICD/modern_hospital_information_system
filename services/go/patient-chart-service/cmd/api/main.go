@@ -7,8 +7,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type PatientChart struct {
@@ -18,6 +21,24 @@ type PatientChart struct {
 	DoctorID   string `json:"doctor_id"`
 	Summary    string `json:"summary"`
 }
+
+var (
+	httpRequestsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "http_requests_total",
+			Help: "Total HTTP requests.",
+		},
+		[]string{"service", "method", "route", "status"},
+	)
+	httpRequestDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "http_request_duration_seconds",
+			Help:    "HTTP request duration in seconds.",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"service", "method", "route"},
+	)
+)
 
 func fetchFromSupabase(patientID string) ([]PatientChart, error) {
 	baseURL := os.Getenv("SUPABASE_URL")
@@ -54,8 +75,23 @@ func fetchFromSupabase(patientID string) ([]PatientChart, error) {
 }
 
 func main() {
+	const serviceName = "patient-chart-service"
+	prometheus.MustRegister(httpRequestsTotal, httpRequestDuration)
+
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+
+		route := c.FullPath()
+		if route == "" {
+			route = "unmatched"
+		}
+		status := fmt.Sprintf("%d", c.Writer.Status())
+		httpRequestsTotal.WithLabelValues(serviceName, c.Request.Method, route, status).Inc()
+		httpRequestDuration.WithLabelValues(serviceName, c.Request.Method, route).Observe(time.Since(start).Seconds())
+	})
 
 	r.GET("/v1/charts/:patientID", func(c *gin.Context) {
 		patientID := c.Param("patientID")
@@ -82,6 +118,7 @@ func main() {
 	r.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"service": "patient-chart-service", "status": "ok"})
 	})
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	_ = r.Run(":8082")
 }

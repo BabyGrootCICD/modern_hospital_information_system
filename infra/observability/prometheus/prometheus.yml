@@ -1,0 +1,29 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: identity-access-service
+    static_configs:
+      - targets: ["identity-access-service:8081"]
+    metrics_path: /metrics
+
+  - job_name: patient-chart-service
+    static_configs:
+      - targets: ["patient-chart-service:8082"]
+    metrics_path: /metrics
+
+  - job_name: order-clinical-service
+    static_configs:
+      - targets: ["order-clinical-service:8083"]
+    metrics_path: /metrics
+
+  - job_name: lab-transfer-service
+    static_configs:
+      - targets: ["lab-transfer-service:8084"]
+    metrics_path: /metrics
+
+  - job_name: sync-gateway-service
+    static_configs:
+      - targets: ["sync-gateway-service:8085"]
+    metrics_path: /metrics

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -13,6 +14,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/segmentio/kafka-go"
 )
 
@@ -35,6 +38,21 @@ type SyncJob struct {
 var (
 	jobs   = map[string]SyncJob{}
 	jobsMu sync.RWMutex
+	httpRequestsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "http_requests_total",
+			Help: "Total HTTP requests.",
+		},
+		[]string{"service", "method", "route", "status"},
+	)
+	httpRequestDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "http_request_duration_seconds",
+			Help:    "HTTP request duration in seconds.",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"service", "method", "route"},
+	)
 )
 
 func randomID() (string, error) {
@@ -71,8 +89,23 @@ func publishEvent(topic string, payload any) {
 }
 
 func main() {
+	const serviceName = "sync-gateway-service"
+	prometheus.MustRegister(httpRequestsTotal, httpRequestDuration)
+
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+
+		route := c.FullPath()
+		if route == "" {
+			route = "unmatched"
+		}
+		status := fmt.Sprintf("%d", c.Writer.Status())
+		httpRequestsTotal.WithLabelValues(serviceName, c.Request.Method, route, status).Inc()
+		httpRequestDuration.WithLabelValues(serviceName, c.Request.Method, route).Observe(time.Since(start).Seconds())
+	})
 
 	r.POST("/v1/sync/jobs", func(c *gin.Context) {
 		var req CreateSyncJobRequest
@@ -181,6 +214,7 @@ func main() {
 	r.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"service": "sync-gateway-service", "status": "ok"})
 	})
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	_ = r.Run(":8085")
 }

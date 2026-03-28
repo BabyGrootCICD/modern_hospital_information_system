@@ -11,9 +11,11 @@ services:
       - web-next
       - identity-access-service
       - patient-chart-service
+      - order-clinical-service
       - lab-transfer-service
       - sync-gateway-service
       - grafana
+      - prometheus
       - redis
 
   web-next:
@@ -31,6 +33,8 @@ services:
     command: sh -c "go run ./cmd/api"
     environment:
       KAFKA_BROKERS: kafka:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: identity-access-service
     volumes:
       - ../services/go/identity-access-service:/workspace
     ports:
@@ -42,6 +46,8 @@ services:
     command: sh -c "go run ./cmd/api"
     environment:
       KAFKA_BROKERS: kafka:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: lab-transfer-service
     volumes:
       - ../services/go/lab-transfer-service:/workspace
     ports:
@@ -54,6 +60,8 @@ services:
     environment:
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: patient-chart-service
     volumes:
       - ../services/go/patient-chart-service:/workspace
     ports:
@@ -65,10 +73,24 @@ services:
     command: sh -c "go run ./cmd/api"
     environment:
       KAFKA_BROKERS: kafka:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: sync-gateway-service
     volumes:
       - ../services/go/sync-gateway-service:/workspace
     ports:
       - "8085:8085"
+
+  order-clinical-service:
+    image: golang:1.23-alpine
+    working_dir: /workspace
+    command: sh -c "go run ./cmd/api"
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: order-clinical-service
+    volumes:
+      - ../services/go/order-clinical-service:/workspace
+    ports:
+      - "8083:8083"
 
   redis:
     image: redis:7.4-alpine
@@ -102,3 +124,19 @@ services:
       - "3000:3000"
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./observability/otel-collector/config.yaml:/etc/otel/config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
