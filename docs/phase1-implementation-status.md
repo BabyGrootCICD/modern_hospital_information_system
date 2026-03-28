@@ -20,3 +20,23 @@
 - Supabase Auth integration replacing temporary cookie session.
 - Real RBAC policy backend wiring (identity-access-service).
 - Report summary aggregation from migrated Go services.
+
+## Follow-up completed in Phase 2 kickoff
+
+- `identity-access-service` now provides:
+  - `/v1/auth/login`
+  - `/v1/auth/validate`
+  - `/v1/rbac/policies/:role`
+- `lab-transfer-service` now provides:
+  - `/v1/transfers`
+  - `/v1/transfers/:id`
+  - `/v1/transfers/:id/complete`
+- `sync-gateway-service` now provides:
+  - `/v1/sync/jobs`
+  - `/v1/sync/jobs/:id/start`
+  - `/v1/sync/jobs/:id/complete`
+  - `/v1/sync/jobs/:id`
+- Nginx routes added:
+  - `/api/identity/*`
+  - `/api/lab/*`
+  - `/api/sync/*`
