@@ -11,7 +11,7 @@ Status: Implemented baseline across durability, eventing, auth/tenant propagatio
   - replay endpoints added for outbox dead-letters.
   - `sync-gateway-service` now has idempotent consumer baseline for `sync.commands` with consumer dead-letter + replay endpoint.
 - Service-to-service auth and tenant propagation:
-  - internal JWT middleware (HS256 secret via `INTERNAL_JWT_SECRET`) added to write paths in mutable Go services.
+  - internal JWT middleware (HS256 secret via `INTERNAL_JWT_SECRET`) added across all Go APIs (`identity`, `patient-chart`, `order-clinical`, `lab-transfer`, `sync-gateway`), with health/metrics exceptions.
   - tenant propagated via `X-Tenant-ID` / JWT claim into stored records and event headers/payloads.
 - Observability completion baseline:
   - Prometheus alert rules added.

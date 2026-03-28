@@ -21,6 +21,7 @@
   - Service persistence hardening (move remaining in-memory state to Supabase tables where needed).
   - Contract stabilization across BFF and microservices.
   - Kafka consumer expansion beyond `sync.commands` baseline.
+  - Security hardening for internal service auth key management and rotation.
   - End-to-end container deployment hardening (healthchecks, rollout policy, image publishing workflow).
 - Not started:
   - full production chain adapter integration and chain transaction finality verification.

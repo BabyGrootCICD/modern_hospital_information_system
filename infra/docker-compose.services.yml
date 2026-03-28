@@ -29,6 +29,7 @@ services:
     environment:
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       OTEL_SERVICE_NAME: patient-chart-service
     ports:
@@ -44,6 +45,7 @@ services:
       context: ../services/go/order-clinical-service
       dockerfile: Dockerfile
     environment:
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       OTEL_SERVICE_NAME: order-clinical-service
     ports:
