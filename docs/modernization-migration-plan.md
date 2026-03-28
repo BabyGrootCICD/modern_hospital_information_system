@@ -3,10 +3,10 @@
 ## 1) Current-State Scan Summary
 
 ### Existing solution layout
-- `KMU.HisOrder.MVC` (`net6.0`): monolithic ASP.NET MVC + Razor + SignalR + EF Core/PostgreSQL.
-- `KMU.MOHD.WebAPI` (`net6.0`): JWT-based API for MOHD-side records and upload tasks.
-- `KMU.Lab.WebAPI` (`net6.0`): transfer-data API with EF migrations and Swagger.
-- `KMU.HisOrder.Console.Gateway` (`net6.0`): console/offline synchronization gateway with import/export flow.
+- `SHIS.HisOrder.MVC` (`net6.0`): monolithic ASP.NET MVC + Razor + SignalR + EF Core/PostgreSQL.
+- `SHIS.MOHD.WebAPI` (`net6.0`): JWT-based API for MOHD-side records and upload tasks.
+- `SHIS.Lab.WebAPI` (`net6.0`): transfer-data API with EF migrations and Swagger.
+- `SHIS.HisOrder.Console.Gateway` (`net6.0`): console/offline synchronization gateway with import/export flow.
 - SQL snapshots/dumps exist at repository root, indicating schema-first operational history.
 
 ### Key migration implications
@@ -46,7 +46,7 @@
 3. `order-clinical-service` (Go)
 - SOAP/order flows migrated from MVC areas.
 4. `lab-transfer-service` (Go)
-- ownership of current `KMU.Lab.WebAPI` transfer responsibilities.
+- ownership of current `SHIS.Lab.WebAPI` transfer responsibilities.
 5. `sync-gateway-service` (Go)
 - replace console gateway import/export with API + worker model.
 6. `audit-integrity-service` (Rust)

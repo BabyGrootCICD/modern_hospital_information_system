@@ -34,29 +34,29 @@ jobs:
       with:
         languages: ${{ matrix.language }}
 
-    - name: Restore dependencies for KMU.HisOrder.Console.Gateway project
+    - name: Restore dependencies for SHIS.HisOrder.Console.Gateway project
       run: dotnet restore
-      working-directory: KMU.HisOrder.Console.Gateway
+      working-directory: SHIS.HisOrder.Console.Gateway
 
-    - name: Restore dependencies for KMU.HisOrder.MVC project
+    - name: Restore dependencies for SHIS.HisOrder.MVC project
       run: dotnet restore
-      working-directory: KMU.HisOrder.MVC
+      working-directory: SHIS.HisOrder.MVC
 
-    - name: Restore dependencies for KMU.MOHD.WebAPI project
+    - name: Restore dependencies for SHIS.MOHD.WebAPI project
       run: dotnet restore
-      working-directory: KMU.MOHD.WebAPI
+      working-directory: SHIS.MOHD.WebAPI
 
-    - name: Build KMU.HisOrder.Console.Gateway project
+    - name: Build SHIS.HisOrder.Console.Gateway project
       run: dotnet build --no-restore --configuration Release --verbosity detailed
-      working-directory: KMU.HisOrder.Console.Gateway
+      working-directory: SHIS.HisOrder.Console.Gateway
 
-    - name: Build KMU.HisOrder.MVC project
+    - name: Build SHIS.HisOrder.MVC project
       run: dotnet build --no-restore --configuration Release --verbosity detailed
-      working-directory: KMU.HisOrder.MVC
+      working-directory: SHIS.HisOrder.MVC
 
-    - name: Build KMU.MOHD.WebAPI project
+    - name: Build SHIS.MOHD.WebAPI project
       run: dotnet build --no-restore --configuration Release --verbosity detailed
-      working-directory: KMU.MOHD.WebAPI
+      working-directory: SHIS.MOHD.WebAPI
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v2

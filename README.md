@@ -1,4 +1,4 @@
-# KMU.HisOrder(SourceCode)
+# SHIS.HisOrder(SourceCode)
 
 
 ## MOHD DB Server:
@@ -8,11 +8,11 @@
 
 ## MOHD Web API:
 1. Check `Models -> MOHDContext.cs` for correct PostgreSQL connection string.
-2. Follow deployment and publishing process similar to `KMU.HisOrder`.
+2. Follow deployment and publishing process similar to `SHIS.HisOrder`.
 
 ## HIS Gateway:
 1. Ensure Table Schema matches project requirements (Refer: `HIS-Gatweay-Table-Schema-20231211.sql`).
-2. Confirm `kmu_users` gateway credentials match those in `MOHD`.
+2. Confirm `shis_users` gateway credentials match those in `MOHD`.
 3. Verify `Models -> GatewayContext.cs` for correct PostgreSQL connection string.
 4. Confirm deployment environment has .NET CORE 6 or above installed.
 
@@ -30,11 +30,11 @@
 
 ## MOHD Web API:
 1. 確認 `Models -> MOHDContext.cs` 中的 PostgreSQL 連線字串是否正確。
-2. 遵循與 `KMU.HisOrder` 相似的部署和發佈流程。
+2. 遵循與 `SHIS.HisOrder` 相似的部署和發佈流程。
 
 ## HIS Gateway:
 1. 確保資料表結構符合專案需求（參考：`HIS-Gatweay-Table-Schema-20231211.sql`）。
-2. 確認 `kmu_users` Gateway 的帳號密碼與 `MOHD` 中的一致。
+2. 確認 `shis_users` Gateway 的帳號密碼與 `MOHD` 中的一致。
 3. 確認 `Models -> GatewayContext.cs` 中的 PostgreSQL 連線字串是否正確。
 4. 確認部署環境已安裝 .NET CORE 6 或以上版本。
 
