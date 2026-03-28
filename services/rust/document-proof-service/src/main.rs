@@ -4,6 +4,7 @@ use axum::{
     Json, Router,
 };
 use hex::encode as hex_encode;
+use redis::AsyncCommands;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -19,6 +20,7 @@ struct AppState {
     retry_queue: Arc<RwLock<Vec<RetryItem>>>,
     dead_letters: Arc<RwLock<Vec<RetryItem>>>,
     retry_max_attempts: u8,
+    redis_url: Option<String>,
     supabase: Option<SupabaseConfig>,
     client: Client,
 }
@@ -87,6 +89,13 @@ struct RetryRunResponse {
 }
 
 #[derive(Serialize)]
+struct DeadLetterReplayResponse {
+    moved: usize,
+    queued: usize,
+    dead_letters: usize,
+}
+
+#[derive(Serialize)]
 struct Health<'a> {
     service: &'a str,
     status: &'a str,
@@ -103,6 +112,63 @@ fn sha256_hex(input: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(input.as_bytes());
     hex_encode(hasher.finalize())
+}
+
+const REDIS_RETRY_QUEUE_KEY: &str = "document_proof:retry_queue";
+const REDIS_DEAD_LETTER_KEY: &str = "document_proof:dead_letters";
+
+async fn load_retry_state_from_redis(state: &AppState) {
+    let Some(redis_url) = &state.redis_url else {
+        return;
+    };
+    let Ok(client) = redis::Client::open(redis_url.as_str()) else {
+        return;
+    };
+    let Ok(mut conn) = client.get_multiplexed_async_connection().await else {
+        return;
+    };
+
+    let queued_raw: Option<String> = conn.get(REDIS_RETRY_QUEUE_KEY).await.ok();
+    let dead_raw: Option<String> = conn.get(REDIS_DEAD_LETTER_KEY).await.ok();
+
+    if let Some(raw) = queued_raw {
+        if let Ok(items) = serde_json::from_str::<Vec<RetryItem>>(&raw) {
+            let mut queue = state.retry_queue.write().await;
+            *queue = items;
+        }
+    }
+    if let Some(raw) = dead_raw {
+        if let Ok(items) = serde_json::from_str::<Vec<RetryItem>>(&raw) {
+            let mut dlq = state.dead_letters.write().await;
+            *dlq = items;
+        }
+    }
+}
+
+async fn persist_retry_state_to_redis(state: &AppState) {
+    let Some(redis_url) = &state.redis_url else {
+        return;
+    };
+    let Ok(client) = redis::Client::open(redis_url.as_str()) else {
+        return;
+    };
+    let Ok(mut conn) = client.get_multiplexed_async_connection().await else {
+        return;
+    };
+
+    let queued = state.retry_queue.read().await.clone();
+    let dead = state.dead_letters.read().await.clone();
+    let queued_json = match serde_json::to_string(&queued) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+    let dead_json = match serde_json::to_string(&dead) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+
+    let _set_queue: redis::RedisResult<()> = conn.set(REDIS_RETRY_QUEUE_KEY, queued_json).await;
+    let _set_dead: redis::RedisResult<()> = conn.set(REDIS_DEAD_LETTER_KEY, dead_json).await;
 }
 
 async fn supabase_insert_anchor(state: &AppState, record: &AnchorRecord) -> bool {
@@ -191,6 +257,8 @@ async fn anchor(State(state): State<AppState>, Json(req): Json<AnchorRequest>) -
             anchor: record.clone(),
             attempts: 1,
         });
+        drop(queue);
+        persist_retry_state_to_redis(&state).await;
     }
     Json(AnchorResponse { anchor: record, persisted })
 }
@@ -264,12 +332,14 @@ async fn run_retry_once(state: &AppState) -> RetryRunResponse {
         dlq.extend(dead_items);
     }
 
-    RetryRunResponse {
+    let result = RetryRunResponse {
         attempted: succeeded + failed + moved_to_dead_letter,
         succeeded,
         failed,
         moved_to_dead_letter,
-    }
+    };
+    persist_retry_state_to_redis(state).await;
+    result
 }
 
 async fn retry_run(State(state): State<AppState>) -> Json<RetryRunResponse> {
@@ -279,6 +349,26 @@ async fn retry_run(State(state): State<AppState>) -> Json<RetryRunResponse> {
 async fn dead_letters(State(state): State<AppState>) -> Json<Vec<RetryItem>> {
     let dlq = state.dead_letters.read().await;
     Json(dlq.clone())
+}
+
+async fn replay_dead_letters(State(state): State<AppState>) -> Json<DeadLetterReplayResponse> {
+    let moved_items = {
+        let mut dlq = state.dead_letters.write().await;
+        std::mem::take(&mut *dlq)
+    };
+    let moved = moved_items.len();
+    if moved > 0 {
+        let mut queue = state.retry_queue.write().await;
+        queue.extend(moved_items);
+    }
+    persist_retry_state_to_redis(&state).await;
+    let queued = state.retry_queue.read().await.len();
+    let dead_letters = state.dead_letters.read().await.len();
+    Json(DeadLetterReplayResponse {
+        moved,
+        queued,
+        dead_letters,
+    })
 }
 
 #[tokio::main]
@@ -301,9 +391,13 @@ async fn main() {
             .ok()
             .and_then(|v| v.parse::<u8>().ok())
             .unwrap_or(3),
+        redis_url: std::env::var("REDIS_URL")
+            .ok()
+            .filter(|v| !v.trim().is_empty()),
         supabase,
         client: Client::new(),
     };
+    load_retry_state_from_redis(&state).await;
 
     let worker_state = state.clone();
     tokio::spawn(async move {
@@ -324,6 +418,7 @@ async fn main() {
         .route("/v1/proofs/retry/status", get(retry_status))
         .route("/v1/proofs/retry/run", post(retry_run))
         .route("/v1/proofs/retry/deadletters", get(dead_letters))
+        .route("/v1/proofs/retry/replay-deadletters", post(replay_dead_letters))
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8092")
