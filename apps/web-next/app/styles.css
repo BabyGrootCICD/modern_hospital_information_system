@@ -1,0 +1,14 @@
+:root {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 24px;
+  background: linear-gradient(180deg, #f5f9ff 0%, #e6efff 100%);
+  color: #10233c;
+}
+
+h1 {
+  margin: 0 0 12px;
+}

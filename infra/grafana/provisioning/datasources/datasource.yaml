@@ -1,0 +1,7 @@
+apiVersion: 1
+
+datasources:
+  - name: Grafana
+    type: grafana
+    access: proxy
+    isDefault: true
