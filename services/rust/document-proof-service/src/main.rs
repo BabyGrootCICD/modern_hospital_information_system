@@ -16,6 +16,7 @@ use tokio::sync::RwLock;
 #[derive(Clone)]
 struct AppState {
     anchors: Arc<RwLock<HashMap<String, AnchorRecord>>>,
+    retry_queue: Arc<RwLock<Vec<AnchorRecord>>>,
     supabase: Option<SupabaseConfig>,
     client: Client,
 }
@@ -59,6 +60,19 @@ struct ReconcileResponse {
     key: String,
     supabase_configured: bool,
     persisted: bool,
+}
+
+#[derive(Serialize)]
+struct RetryStatusResponse {
+    queued: usize,
+    supabase_configured: bool,
+}
+
+#[derive(Serialize)]
+struct RetryRunResponse {
+    attempted: usize,
+    succeeded: usize,
+    failed: usize,
 }
 
 #[derive(Serialize)]
@@ -160,6 +174,10 @@ async fn anchor(State(state): State<AppState>, Json(req): Json<AnchorRequest>) -
     drop(anchors);
 
     let persisted = supabase_insert_anchor(&state, &record).await;
+    if !persisted && state.supabase.is_some() {
+        let mut queue = state.retry_queue.write().await;
+        queue.push(record.clone());
+    }
     Json(AnchorResponse { anchor: record, persisted })
 }
 
@@ -187,6 +205,47 @@ async fn reconcile_anchor(
     })
 }
 
+async fn retry_status(State(state): State<AppState>) -> Json<RetryStatusResponse> {
+    let queue = state.retry_queue.read().await;
+    Json(RetryStatusResponse {
+        queued: queue.len(),
+        supabase_configured: state.supabase.is_some(),
+    })
+}
+
+async fn run_retry_once(state: &AppState) -> RetryRunResponse {
+    let pending = {
+        let mut queue = state.retry_queue.write().await;
+        std::mem::take(&mut *queue)
+    };
+
+    let mut succeeded = 0usize;
+    let mut failed_items = Vec::new();
+    for item in pending {
+        if supabase_insert_anchor(state, &item).await {
+            succeeded += 1;
+        } else {
+            failed_items.push(item);
+        }
+    }
+
+    let failed = failed_items.len();
+    {
+        let mut queue = state.retry_queue.write().await;
+        queue.extend(failed_items);
+    }
+
+    RetryRunResponse {
+        attempted: succeeded + failed,
+        succeeded,
+        failed,
+    }
+}
+
+async fn retry_run(State(state): State<AppState>) -> Json<RetryRunResponse> {
+    Json(run_retry_once(&state).await)
+}
+
 #[tokio::main]
 async fn main() {
     let supabase = match (
@@ -201,15 +260,29 @@ async fn main() {
 
     let state = AppState {
         anchors: Arc::new(RwLock::new(HashMap::new())),
+        retry_queue: Arc::new(RwLock::new(Vec::new())),
         supabase,
         client: Client::new(),
     };
+
+    let worker_state = state.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
+        loop {
+            interval.tick().await;
+            if worker_state.supabase.is_some() {
+                let _ = run_retry_once(&worker_state).await;
+            }
+        }
+    });
 
     let app = Router::new()
         .route("/healthz", get(healthz))
         .route("/v1/proofs/anchor", post(anchor))
         .route("/v1/proofs/verify/:anchor_id", get(verify_anchor))
         .route("/v1/proofs/reconcile/:anchor_id", get(reconcile_anchor))
+        .route("/v1/proofs/retry/status", get(retry_status))
+        .route("/v1/proofs/retry/run", post(retry_run))
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8092")
