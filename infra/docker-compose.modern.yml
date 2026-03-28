@@ -9,6 +9,8 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - web-next
+      - identity-access-service
+      - lab-transfer-service
       - grafana
       - redis
 
@@ -20,6 +22,24 @@ services:
       - ../apps/web-next:/workspace
     ports:
       - "3001:3001"
+
+  identity-access-service:
+    image: golang:1.23-alpine
+    working_dir: /workspace
+    command: sh -c "go run ./cmd/api"
+    volumes:
+      - ../services/go/identity-access-service:/workspace
+    ports:
+      - "8081:8081"
+
+  lab-transfer-service:
+    image: golang:1.23-alpine
+    working_dir: /workspace
+    command: sh -c "go run ./cmd/api"
+    volumes:
+      - ../services/go/lab-transfer-service:/workspace
+    ports:
+      - "8084:8084"
 
   redis:
     image: redis:7.4-alpine
