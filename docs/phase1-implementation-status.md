@@ -51,3 +51,8 @@ Durability note: integrity/proof retry/dead-letter state now persists to Redis a
   - `/api/identity/*`
   - `/api/lab/*`
   - `/api/sync/*`
+
+## Potential TODOs
+
+- Add end-to-end locale + auth redirect tests in Playwright.
+- Add CSP and security headers validation for all frontend routes.

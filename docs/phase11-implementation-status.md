@@ -25,9 +25,9 @@ Standardize service packaging with Dockerfiles and provide a compose stack that 
 
 ## Current limits
 
-- Compose stack has no per-service healthcheck policies yet.
-- No image publishing/signing workflow yet.
-- No CI step validates compose build for all service images.
+- Compose stack has healthchecks, but startup ordering and dependency readiness policies are still basic.
+- Image build/scan/sign pipelines exist, but SBOM attestation enforcement is still maturing.
+- Compose build validation exists in CI, but failure triage automation is still minimal.
 
 ## Next step
 
@@ -35,3 +35,8 @@ Standardize service packaging with Dockerfiles and provide a compose stack that 
 - Add CI pipeline jobs for Docker build, vulnerability scanning, and image push.
 - Add versioned image tags and release promotion rules.
 - Complete Redis/Supabase durability + outbox/idempotent consumer layers and attach Robot e2e coverage.
+
+## Potential TODOs
+
+- Add pinned base-image digest policy checks.
+- Add rollback automation for failed production promotions.

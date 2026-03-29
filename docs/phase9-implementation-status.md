@@ -37,3 +37,8 @@ Introduce failure-threshold routing for retry workflows and expose dead-letter v
 - Emit retry/dead-letter lifecycle events to Kafka and add Grafana panels.
 - Add operator authorization and audit trail for dead-letter replay.
 - Evolve Redis snapshot persistence into coordinated consumer-safe queue semantics.
+
+## Potential TODOs
+
+- Add dead-letter classification tags for triage automation.
+- Add replay simulation endpoint for dry-run operational review.

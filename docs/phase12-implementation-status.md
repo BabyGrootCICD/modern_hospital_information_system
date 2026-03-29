@@ -28,6 +28,10 @@ Status: Implemented baseline across durability, eventing, auth/tenant propagatio
   - dedicated workflows added:
     - backend CI (`.github/workflows/backend-ci.yml`) builds all backends and runs all suites.
     - frontend+infra CI (`.github/workflows/frontend-infra-ci.yml`) validates frontend build and infra compose/config.
+  - CI stabilization updates:
+    - actions forced to Node 24 runtime (`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true`) to avoid Node 20 deprecation cutoff risk.
+    - Go cache dependency path set per service (`services/go/<service>/go.sum`) to avoid cache restore path errors.
+    - backend report artifact upload hardened (`test/report/.keep`, `if-no-files-found: warn`).
 - Robot Framework full suite:
   - full test suite created in `test/suites` with health/auth/outbox/blockchain coverage.
   - report output path standardized to `test/report`.
@@ -37,3 +41,8 @@ Status: Implemented baseline across durability, eventing, auth/tenant propagatio
 - Supabase table-backed persistence for the newly Redis-backed Go service state is still pending.
 - Consumer coverage for additional topics is pending.
 - Production-grade blockchain finality verification and legal workflow sign-off remain pending.
+
+## Potential TODOs
+
+- Add CI flake-detection and automatic retry policy for integration-test suites.
+- Add a synthetic canary test stage post-deploy using Robot smoke packs.

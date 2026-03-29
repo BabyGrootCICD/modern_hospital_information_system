@@ -1,6 +1,6 @@
 # Phase 6 Implementation Status
 
-Status: Integrity/blockchain pilot APIs implemented with simulated anchoring.
+Status: Integrity/blockchain pilot APIs implemented with external-adapter + finality baseline.
 
 ## Implemented
 
@@ -22,7 +22,7 @@ Status: Integrity/blockchain pilot APIs implemented with simulated anchoring.
 
 ## Current limits
 
-- Anchoring is currently simulated (no live blockchain transaction submission).
+- External adapter mode exists, but production chain endpoint reliability and finality SLAs are still pending.
 - Durable Supabase persistence is now optional and environment-driven.
 - No cryptographic signature verification against clinical signer identities yet.
 
@@ -33,7 +33,14 @@ Status: Integrity/blockchain pilot APIs implemented with simulated anchoring.
 - Added retry queue status and retry run endpoints plus background retry workers.
 - Added dead-letter handling and dead-letter inspection endpoints with `RETRY_MAX_ATTEMPTS` threshold control.
 - Added Redis-backed retry/dead-letter state persistence and dead-letter replay endpoints.
+- Added legal report endpoint (`/v1/integrity/legal-report/:aggregate_id`) for audit export baseline.
+- Added chain adapter/finality config path in proof service (`CHAIN_ADAPTER_URL`, `CHAIN_STATUS_URL`, retry/backoff envs).
 
 ## Next step
 
-- Integrate a real chain adapter (consortium or L2), store tx metadata in Supabase, and add reconciliation jobs.
+- Complete production adapter contracts, finality incident policies, and signer identity verification.
+
+## Potential TODOs
+
+- Add deterministic report export format (PDF + signed JSON bundle).
+- Add block explorer deep-link metadata for each anchored transaction.

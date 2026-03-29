@@ -7,6 +7,9 @@ on:
     branches: [main, dev]
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 permissions:
   contents: read
 
@@ -24,12 +27,13 @@ jobs:
           - sync-gateway-service
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: "1.23"
+          cache-dependency-path: services/go/${{ matrix.service }}/go.sum
 
       - name: Build
         working-directory: services/go/${{ matrix.service }}
@@ -49,7 +53,7 @@ jobs:
           - document-proof-service
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -68,15 +72,17 @@ jobs:
     needs: [build-go-backends, build-rust-backends]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
       - name: Prepare report folder
-        run: mkdir -p test/report
+        run: |
+          mkdir -p test/report
+          touch test/report/.keep
 
       - name: Install Robot dependencies
         run: pip install -r test/requirements.txt
@@ -116,16 +122,25 @@ jobs:
             echo
           } > test/report/backend-health.txt
 
+      - name: Ensure report folder exists for upload
+        if: always()
+        run: |
+          mkdir -p test/report
+          touch test/report/.keep
+
       - name: Upload test report artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: backend-test-report
           path: test/report
+          if-no-files-found: warn
 
       - name: Dump compose logs on failure
         if: failure()
-        run: docker compose -f infra/docker-compose.services.yml logs --no-color > test/report/compose.log
+        run: |
+          mkdir -p test/report
+          docker compose -f infra/docker-compose.services.yml logs --no-color > test/report/compose.log
 
       - name: Stop backend stack
         if: always()

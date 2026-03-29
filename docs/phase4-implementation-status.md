@@ -1,6 +1,6 @@
 # Phase 4 Implementation Status
 
-Status: Kickoff implemented; durable event pipeline hardening pending.
+Status: Baseline implemented; durable event pipeline hardening in progress.
 
 ## Implemented
 
@@ -24,3 +24,8 @@ Status: Kickoff implemented; durable event pipeline hardening pending.
 - Event-driven trigger from transfer/sync completion to integrity event creation.
 - Durable outbox integration with integrity/proof persistence flows.
 - Retry/dead-letter events should be emitted to Kafka in the next pass for failure observability (Redis durability is now in place).
+
+## Potential TODOs
+
+- Add topic-level retention and compaction policy documentation.
+- Add consumer lag alert thresholds per critical topic.
