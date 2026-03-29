@@ -1,6 +1,6 @@
 # SHIS Modernization Migration Plan
 
-## 0) Live Progress Snapshot (2026-03-28)
+## 0) Live Progress Snapshot (2026-03-29)
 
 - Completed:
   - Phase 0 foundation scaffolding (Next.js, Go, Rust, infra baseline).
@@ -17,16 +17,17 @@
   - Phase 10 kickoff (Redis-backed retry/dead-letter durability + dead-letter replay endpoints for Rust services).
   - Phase 11 kickoff (containerization: Dockerfiles for all Go/Rust services + build-based compose stack).
   - Phase 12 kickoff (Go Redis durability, Kafka outbox/DLQ + idempotent consumer baseline, JWT tenant propagation, observability stack completion, blockchain adapter/reporting, CI + Robot e2e baseline).
+  - Phase 13 kickoff (CI resilience fixes: deterministic Go Docker builds using `go.sum`, Node24 action-runtime migration guardrails, report artifact hardening).
 - In progress:
-  - Service persistence hardening (move remaining in-memory state to Supabase tables where needed).
+  - Service persistence hardening (move Redis snapshots to canonical Supabase tables with migration jobs).
   - Contract stabilization across BFF and microservices.
   - Kafka consumer expansion beyond `sync.commands` baseline.
   - Security hardening for internal service auth key management and rotation.
   - CI workflow split and stabilization for backend vs frontend/infra delivery lanes.
   - End-to-end container deployment hardening (healthchecks, rollout policy, image publishing workflow).
 - Not started:
-  - full production chain adapter integration and chain transaction finality verification.
-  - legal/compliance sign-off workflow for generated audit reports.
+  - full legal/compliance sign-off workflow for generated audit reports.
+  - production incident response playbooks for blockchain/finality outage scenarios.
 
 ## 1) Current-State Scan Summary
 
@@ -211,11 +212,11 @@
 
 ## 10) Immediate Next Actions
 
-1. Replace in-memory stores in `identity`, `lab-transfer`, and `sync-gateway` with Supabase + Redis.
-2. Introduce Kafka topic contracts and outbox tables for transfer/sync/audit/retry/dead-letter events.
-3. Add service-to-service auth and tenant propagation headers.
-4. Add Grafana dashboards for retry/dead-letter depth, replay volume, and persistence failure rates.
-5. Implement Grafana SLO alerts before broader production traffic cutover.
+1. Add Supabase table-backed canonical persistence for `identity`, `lab-transfer`, and `sync-gateway` (Redis as hot cache only).
+2. Expand idempotent consumer coverage to `transfer.events`, `audit.events`, and retry/dead-letter topics.
+3. Add JWT secret rotation automation and service identity distribution controls.
+4. Add Alertmanager routing/escalation and tenant-segmented Grafana dashboards.
+5. Add blockchain finality verification retry/backoff policies with failure alerting and operator runbook links.
 
 ## 11) Remaining Phases / TODOs (Post-Phase 11)
 
@@ -240,3 +241,11 @@
 4. Add Alertmanager routing + escalation policies and tenant-segmented Grafana dashboards.
 5. Integrate production blockchain endpoint and verify inclusion/finality with retry/backoff strategy.
 6. Add signed SBOM generation and enforcement gates in release promotion.
+
+## 13) Potential TODOs
+
+1. Add contract-test CI stage for all REST endpoints and Kafka schemas.
+2. Add chaos test scenarios for Redis outage, Kafka lag, and Supabase transient errors.
+3. Add per-tenant rate-limits and abuse-detection dashboards.
+4. Add long-term audit report archival and retention purge workflows.
+5. Add progressive delivery controls (blue/green or canary) with auto-rollback triggers.

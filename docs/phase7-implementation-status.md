@@ -32,3 +32,8 @@ Status: Durability hardening in progress for integrity/proof services.
 - Dead-letter handling and dead-letter inspection endpoints implemented.
 - Kafka persistence/dead-letter events remain pending.
 - Redis-backed retry/dead-letter durability and replay APIs implemented.
+
+## Potential TODOs
+
+- Add reconciliation drift dashboard with event-age buckets.
+- Add automatic stale-record reconciliation scheduler with tenant isolation.

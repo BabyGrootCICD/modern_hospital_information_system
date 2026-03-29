@@ -1,6 +1,6 @@
 # Phase 2 Implementation Status
 
-Status: Core extraction APIs implemented; persistence/event layers pending.
+Status: Core extraction APIs implemented; persistence/event layers in active hardening.
 
 ## Goal
 
@@ -27,17 +27,18 @@ Extract backend capabilities from legacy monolith boundaries into independently 
 
 ## Current limits
 
-- In-memory storage only (no Redis/Kafka/Supabase persistence yet).
-- No service-to-service auth tokens yet.
-- Kafka publish hooks now exist, but outbox + durable consumer flows are still pending.
-- Metrics endpoints now exist, but SLO alerting and trace correlation are pending.
-- Integrity verification APIs are now available, but service-to-service auth on those paths is still pending.
-- Integrity/proof persistence now supports Supabase hooks, but cross-service transaction consistency is pending.
-- Integrity/proof retry behavior now exists, but durable queue storage is pending.
-- Integrity/proof dead-letter handling now includes Redis-backed queue durability and replay APIs; event emission is still pending.
+- Redis-backed durability is implemented for mutable Go services, but Supabase canonical write-through remains partial.
+- Service-to-service JWT validation is implemented in Go APIs, but key rotation automation is still pending.
+- Kafka outbox + idempotent consumer baseline exists, but broader topic coverage is still pending.
+- Metrics/alerts stack is wired, but tenant-segmented SLO dashboards remain pending.
 
 ## Next incremental step
 
 - Add Redis-backed job/session storage and Kafka publish hooks for transfer/sync state transitions.
 - Enforce service JWT validation for all write endpoints.
 - Add idempotency keys and request replay safety for transfer/sync create endpoints.
+
+## Potential TODOs
+
+- Add OpenAPI contract tests for identity/lab/sync endpoints in CI.
+- Add token audience/issuer claim enforcement for internal JWTs.

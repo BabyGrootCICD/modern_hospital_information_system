@@ -34,3 +34,8 @@ Phase 10 note: retry/dead-letter state is now persisted to Redis with replay end
 
 - Emit retry success/failure/dead-letter events to Kafka.
 - Add dead-letter replay authorization controls and operator audit events.
+
+## Potential TODOs
+
+- Add dead-letter replay rate limiting and replay window constraints.
+- Add per-tenant dead-letter retention policies.

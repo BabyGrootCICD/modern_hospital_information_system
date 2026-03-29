@@ -1,6 +1,6 @@
 # Phase 5 Implementation Status
 
-Status: Kickoff implemented; SLO and tracing hardening pending.
+Status: Core observability stack implemented; tenant/SLO hardening pending.
 
 ## Implemented
 
@@ -15,9 +15,12 @@ Status: Kickoff implemented; SLO and tracing hardening pending.
   - HTTP duration histogram
 - Infrastructure observability baseline:
   - Prometheus scrape config (`infra/observability/prometheus/prometheus.yml`)
+  - Prometheus alert rules (`infra/observability/prometheus/alerts.yml`)
   - OTEL collector base config (`infra/observability/otel-collector/config.yaml`)
+  - Loki + Tempo configs and compose integration
   - Prometheus + OTEL collector added to compose
-  - Grafana datasource switched to Prometheus
+  - Grafana datasources now include Prometheus, Loki, Tempo
+  - Grafana dashboard provisioning baseline added
   - Nginx route `/prometheus/*` added
 
 ## Pending for full Phase 5 completion
@@ -31,3 +34,8 @@ Status: Kickoff implemented; SLO and tracing hardening pending.
 - Retry queue depth metrics for integrity/proof services.
 - Dead-letter queue depth and drain-rate metrics for integrity/proof services.
 - Redis persistence availability metrics for retry/dead-letter queue state.
+
+## Potential TODOs
+
+- Add per-tenant dashboard variables and RBAC-based dashboard folders.
+- Add Alertmanager mute/silence governance and escalation matrix.

@@ -29,3 +29,9 @@ Status: Kickoff implemented (schema baseline + service integration); migration e
 - Retry queue status and retry execution endpoints now support persistence recovery workflows.
 - Dead-letter queue inspection endpoints now support triage for repeated persistence failures.
 - Retry/dead-letter state can now recover after restarts via Redis persistence in both Rust services.
+- Go service canonical Supabase write-through migration is now partially underway and still requires schema + backfill completion.
+
+## Potential TODOs
+
+- Add data-drift detector job comparing Redis snapshots to Supabase canonical tables.
+- Add migration rollback simulation for each schema release.

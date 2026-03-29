@@ -41,3 +41,8 @@ Status: Implemented baseline across durability, eventing, auth/tenant propagatio
 - Supabase table-backed persistence for the newly Redis-backed Go service state is still pending.
 - Consumer coverage for additional topics is pending.
 - Production-grade blockchain finality verification and legal workflow sign-off remain pending.
+
+## Potential TODOs
+
+- Add CI flake-detection and automatic retry policy for integration-test suites.
+- Add a synthetic canary test stage post-deploy using Robot smoke packs.
