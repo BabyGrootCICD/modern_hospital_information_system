@@ -18,5 +18,8 @@
     "@types/react": "19.0.12",
     "@types/react-dom": "19.0.5",
     "typescript": "5.8.2"
+  },
+  "overrides": {
+    "postcss": "^8.5.23"
   }
 }
